@@ -1,5 +1,6 @@
 import { Route, Routes, NavLink } from 'react-router-dom'
 import { Box } from '@chakra-ui/react'
+import { Calculator } from 'lucide-react'
 import { useColorMode } from './components/ColorModeProvider'
 import Header from './components/Header'
 import Calc from './pages/Calc.tsx'
@@ -36,7 +37,7 @@ function Home() {
           web-tools
         </Box>
         <Box as="p" color={colorMode === 'light' ? 'gray.600' : 'gray.300'} mb={6}>
-          便利なウェブツール集です
+          便利なウェブツール集
         </Box>
         <Box as="h3" fontSize="lg" fontWeight="medium" mb={3}>
           利用可能なツール
@@ -62,9 +63,15 @@ function Home() {
               style={{
                 textDecoration: 'none',
                 color: colorMode === 'light' ? '#3182CE' : '#90CDF4',
-                fontWeight: 'medium'
+                fontWeight: 'medium',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                width: '100%'
               }}>
-              📊 計算ツール - 改行テキストの数値を合計
+              <Calculator size={20} />
+              計算ツール - 改行テキストの数値を合計
             </NavLink>
           </Box>
         </Box>
