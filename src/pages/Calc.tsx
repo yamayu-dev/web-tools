@@ -87,7 +87,7 @@ function Calc() {
 
   const handleCopySum = async () => {
     try {
-      await navigator.clipboard.writeText(formatNumber(sum))
+      await navigator.clipboard.writeText(sum.toString())
       showToast('合計をクリップボードにコピーしました')
     } catch (error) {
       showToast('クリップボードへのコピーに失敗しました', 3000)
