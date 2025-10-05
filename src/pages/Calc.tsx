@@ -19,9 +19,6 @@ function Calc() {
   const taRef = useRef<HTMLTextAreaElement | null>(null)
   const { colorMode } = useColorMode()
 
-  // 数値フォーマット関数
-  const fmt = (n: number) => new Intl.NumberFormat(undefined, { maximumFractionDigits: 12 }).format(n)
-
   // 解析ロジック
   const { sum, count, numbers, errors } = useMemo(() => {
     const lines = text.replace(/\r\n/g, '\n').split('\n')
@@ -89,7 +86,7 @@ function Calc() {
 
   const handleCopySum = async () => {
     try {
-      await navigator.clipboard.writeText(fmt(sum))
+      await navigator.clipboard.writeText(String(sum))
       setShowToast('合計をクリップボードにコピーしました')
       setTimeout(() => setShowToast(''), 2000)
     } catch (error) {
