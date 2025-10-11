@@ -1,10 +1,16 @@
 import { Route, Routes, NavLink } from 'react-router-dom'
 import { Box } from '@chakra-ui/react'
 import { Calculator } from 'lucide-react'
-import { useColorMode } from './components/ColorModeProvider'
+import { useColorStyles } from './hooks/useColorStyles'
 import Header from './components/Header'
 import Calc from './pages/Calc.tsx'
 import './App.css'
+
+// 定数定義
+const APP_CONSTANTS = {
+  CALCULATOR_ICON_SIZE: 20,
+  GAP_SIZE: '8px',
+} as const
 
 function App() {
   return (
@@ -21,26 +27,20 @@ function App() {
 }
 
 function Home() {
-  const { colorMode } = useColorMode()
+  const colorStyles = useColorStyles()
   
   return (
     <Box maxW="container.xl" mx="auto" py={6} px={4}>
       <Box
-        bg={colorMode === 'light' ? 'white' : 'gray.800'}
-        color={colorMode === 'light' ? 'gray.800' : 'white'}
+        bg={colorStyles.bg.primary}
+        color={colorStyles.text.primary}
         p={6}
         rounded="lg"
         border="1px solid"
-        borderColor={colorMode === 'light' ? 'gray.200' : 'gray.600'}
+        borderColor={colorStyles.border.default}
         shadow="sm">
         <Box as="h2" fontSize="2xl" fontWeight="bold" mb={4}>
           web-tools
-        </Box>
-        <Box as="p" color={colorMode === 'light' ? 'gray.600' : 'gray.300'} mb={6}>
-          便利なウェブツール集
-        </Box>
-        <Box as="h3" fontSize="lg" fontWeight="medium" mb={3}>
-          利用可能なツール
         </Box>
         <Box
           as="ul"
@@ -50,28 +50,28 @@ function Home() {
           <Box
             as="li"
             p={3}
-            bg={colorMode === 'light' ? 'blue.50' : 'blue.900'}
+            bg={colorStyles.accent.blue.cardBg}
             border="1px solid"
-            borderColor={colorMode === 'light' ? 'blue.200' : 'blue.700'}
+            borderColor={colorStyles.accent.blue.cardBorder}
             rounded="md"
             _hover={{
-              bg: colorMode === 'light' ? 'blue.100' : 'blue.800'
+              bg: colorStyles.accent.blue.cardHover
             }}
             transition="background-color 0.2s">
             <NavLink 
               to="/calc"
               style={{
                 textDecoration: 'none',
-                color: colorMode === 'light' ? '#3182CE' : '#90CDF4',
+                color: colorStyles.accent.blue.linkColor,
                 fontWeight: 'medium',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px',
+                gap: APP_CONSTANTS.GAP_SIZE,
                 width: '100%'
               }}>
-              <Calculator size={20} />
-              計算ツール - 改行テキストの数値を合計
+              <Calculator size={APP_CONSTANTS.CALCULATOR_ICON_SIZE} />
+              計算ツール - 改行テキストの数値合計
             </NavLink>
           </Box>
         </Box>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react'
 
 type ColorMode = 'light' | 'dark'
 
@@ -6,6 +6,7 @@ interface ColorModeContextType {
   colorMode: ColorMode
   toggleColorMode: () => void
   setColorMode: (mode: ColorMode) => void
+  isInitialized: boolean
 }
 
 const ColorModeContext = createContext<ColorModeContextType | undefined>(undefined)
@@ -23,6 +24,7 @@ interface ColorModeProviderProps {
 }
 
 export const ColorModeProvider: React.FC<ColorModeProviderProps> = ({ children }) => {
+  const [isInitialized, setIsInitialized] = useState(false)
   const [colorMode, setColorModeState] = useState<ColorMode>(() => {
     // ローカルストレージから初期値を取得
     if (typeof window !== 'undefined') {
@@ -44,11 +46,12 @@ export const ColorModeProvider: React.FC<ColorModeProviderProps> = ({ children }
     setColorModeState(mode)
     localStorage.setItem('chakra-ui-color-mode', mode)
     
-    // HTMLにclass属性を設定してCSSでテーマを適用
+    // HTMLにdata-theme属性とclass属性を設定
     if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', mode)
+      // 後方互換性のためクラスも残す
       document.documentElement.classList.remove('light', 'dark')
       document.documentElement.classList.add(mode)
-      document.documentElement.setAttribute('data-theme', mode)
     }
   }
 
@@ -56,14 +59,22 @@ export const ColorModeProvider: React.FC<ColorModeProviderProps> = ({ children }
     setColorMode(colorMode === 'light' ? 'dark' : 'light')
   }
 
-  useEffect(() => {
-    // 初期設定でHTMLにclass属性を設定
+  useLayoutEffect(() => {
+    // 初期設定でHTMLにdata-theme属性を設定（同期的に実行）
     if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', colorMode)
+      // 後方互換性のためクラスも設定
       document.documentElement.classList.remove('light', 'dark')
       document.documentElement.classList.add(colorMode)
-      document.documentElement.setAttribute('data-theme', colorMode)
     }
+    // 初期化完了をマーク（colorModeが変更されるたびに実行）
+    setIsInitialized(true)
   }, [colorMode])
+
+  // 初回マウント時の初期化（同期的）
+  useLayoutEffect(() => {
+    setIsInitialized(true)
+  }, [])
 
   useEffect(() => {
     // システムのカラーモード変更を監視
@@ -86,6 +97,7 @@ export const ColorModeProvider: React.FC<ColorModeProviderProps> = ({ children }
     colorMode,
     toggleColorMode,
     setColorMode,
+    isInitialized,
   }
 
   return (

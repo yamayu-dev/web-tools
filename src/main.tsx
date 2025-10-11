@@ -8,26 +8,48 @@ import {
   defineConfig,
 } from "@chakra-ui/react"
 import { ColorModeProvider } from './components/ColorModeProvider.tsx'
+import { COLOR_TOKENS } from './constants/colorTokens'
 import App from './App'
 import './index.css'
 
-const config = defineConfig({
-  theme: {
-    tokens: {
-      colors: {},
+/**
+ * 共通のカラートークンを使用してChakra UI設定を作成
+ * useColorStyles.tsと同じカラートークンを参照
+ */
+const createConfigWithColorStyles = () => {
+  return defineConfig({
+    theme: {
+      tokens: {
+        colors: {},
+      },
+      semanticTokens: {
+        colors: {
+          // アプリケーションで使用される基本カラー
+          'app.text.primary': {
+            value: { 
+              base: COLOR_TOKENS.light.text.primary, 
+              _dark: COLOR_TOKENS.dark.text.primary 
+            }
+          },
+          'app.bg.primary': {
+            value: { 
+              base: COLOR_TOKENS.light.bg.primary, 
+              _dark: COLOR_TOKENS.dark.bg.primary 
+            }
+          },
+        }
+      }
     },
-  },
-  globalCss: {
-    body: {
-      bg: 'gray.50',
-      color: 'gray.900',
-      _dark: {
-        bg: 'gray.900',
-        color: 'gray.50',
+    globalCss: {
+      body: {
+        bg: 'app.bg.primary',
+        color: 'app.text.primary',
       },
     },
-  },
-})
+  })
+}
+
+const config = createConfigWithColorStyles()
 
 const system = createSystem(defaultConfig, config)
 

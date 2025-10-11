@@ -10,40 +10,28 @@ import {
 } from '@chakra-ui/react'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
-import { formatNumber } from '../utils/numberUtils'
+import { formatNumber, parseNumbers } from '../utils/numberUtils'
 import type { Mode } from '../types/calculator'
 
-// 数値解析ロジック
-const parseNumbers = (text: string, mode: Mode) => {
-  const lines = text.replace(/\r\n/g, '\n').split('\n')
-  const nums: number[] = []
-  const errs: string[] = []
-  const numRegex = /[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g
+// 定数定義
+const TOAST_DURATIONS = {
+  SHORT: 1000,
+  MEDIUM: 1500,
+  LONG: 3000,
+  ERROR: 2500,
+} as const
 
-  if (mode === 'perLineFirstNumber') {
-    lines.forEach((line, i) => {
-      const m = line.match(numRegex)
-      if (m && m.length > 0) {
-        const v = Number(m[0])
-        if (Number.isFinite(v)) nums.push(v)
-        else errs.push(`${i + 1}行目: 数値に変換できません (${m[0]})`)
-      } else if (line.trim() !== '') {
-        errs.push(`${i + 1}行目: 数値が見つかりません`)
-      }
-    })
-  } else {
-    const mAll = text.match(numRegex) ?? []
-    mAll.forEach((s) => {
-      const v = Number(s)
-      if (Number.isFinite(v)) nums.push(v)
-    })
-  }
+const UI_CONSTANTS = {
+  NUMBERS_DISPLAY_LIMIT: 50,
+  TOAST_POSITION_TOP: 20,
+  TOAST_Z_INDEX: 1000,
+  PASTE_DELAY: 100,
+  PASTE_CHECK_DELAY: 50,
+  PASTE_COMMAND_DELAY: 10,
+  SCALE_HOVER: 1.02,
+} as const
 
-  const sum = nums.reduce((a, b) => a + b, 0)
-  return { sum, count: nums.length, numbers: nums, errors: errs }
-}
-
-function Calc() {
+export function Calc() {
   const [text, setText] = useState<string>('')
   const [mode, setMode] = useState<Mode>('perLineFirstNumber')
   const taRef = useRef<HTMLTextAreaElement | null>(null)
@@ -55,7 +43,7 @@ function Calc() {
     return parseNumbers(text, mode)
   }, [text, mode])
 
-  // Ctrl/Cmd+Enter で計算結果を表示
+  // Ctrl/Cmd+Enter で計算結果を表示、Ctrl/Cmd+V でペースト
   useEffect(() => {
     const el = taRef.current
     if (!el) return
@@ -63,7 +51,14 @@ function Calc() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault()
         const result = `計算完了: 合計 ${new Intl.NumberFormat().format(sum)}`
-        showToast(result, 3000)
+        showToast(result, TOAST_DURATIONS.LONG)
+      }
+      // HTTP環境でのペーストサポート
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && !window.isSecureContext) {
+        // ブラウザの標準ペースト動作を許可し、成功メッセージを表示
+        setTimeout(() => {
+          showToast('貼り付け完了', TOAST_DURATIONS.MEDIUM)
+        }, UI_CONSTANTS.PASTE_DELAY)
       }
     }
     el.addEventListener('keydown', handler)
@@ -72,25 +67,92 @@ function Calc() {
 
   const handlePasteFromClipboard = async () => {
     try {
-      const clipboardText = await navigator.clipboard.readText()
-      setText(clipboardText)
-      showToast('クリップボードから貼り付け完了')
-    } catch (error) {
-      showToast('クリップボードからの読み取りに失敗しました', 3000)
+      // 最新のブラウザではナビゲーター.クリップボードが優先
+      if (navigator.clipboard) {
+        try {
+          const clipboardText = await navigator.clipboard.readText()
+          setText(clipboardText)
+          showToast('クリップボードから貼り付け完了')
+          return
+        } catch (clipError) {
+          // クリップボード権限がない場合は下のフォールバックを試す
+          console.log('Clipboard API failed, trying fallback:', clipError)
+        }
+      }
+    } catch {
+      // navigator.clipboardが存在しない場合
+    }
+
+    // フォールバック: execCommandを使用
+    try {
+      if (taRef.current) {
+        const textarea = taRef.current
+        
+        // 一時的に空の値にして、ペースト結果を確実に検出
+        const originalValue = textarea.value
+        textarea.value = ''
+        
+        // フォーカスして選択
+        textarea.focus()
+        textarea.select()
+
+        // 短時間待ってからペースト実行
+        setTimeout(() => {
+          document.execCommand('paste')
+          
+          // ペースト後の値を確認
+          setTimeout(() => {
+            if (textarea.value && textarea.value.trim()) {
+              setText(textarea.value)
+              showToast('クリップボードから貼り付け完了')
+            } else {
+              // ペーストが失敗した場合、元の値に戻す
+              textarea.value = originalValue
+              setText(originalValue)
+              showToast('Ctrl+V (Cmd+V) で貼り付けてください', TOAST_DURATIONS.ERROR)
+            }
+          }, UI_CONSTANTS.PASTE_CHECK_DELAY)
+        }, UI_CONSTANTS.PASTE_COMMAND_DELAY)
+      }
+    } catch {
+      showToast('Ctrl+V (Cmd+V) で貼り付けてください', TOAST_DURATIONS.ERROR)
     }
   }
 
   const handleClear = () => {
     setText('')
-    showToast('クリア完了', 1000)
+    showToast('クリア完了', TOAST_DURATIONS.SHORT)
   }
 
   const handleCopySum = async () => {
     try {
-      await navigator.clipboard.writeText(sum.toString())
-      showToast('合計をクリップボードにコピーしました')
-    } catch (error) {
-      showToast('クリップボードへのコピーに失敗しました', 3000)
+      // HTTPS環境またはlocalhostでは navigator.clipboard を使用
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(sum.toString())
+        showToast('合計をクリップボードにコピーしました')
+        return
+      }
+
+      // HTTP環境のフォールバック処理
+      const textArea = document.createElement('textarea')
+      textArea.value = sum.toString()
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-999999px'
+      textArea.style.top = '-999999px'
+      document.body.appendChild(textArea)
+      textArea.focus()
+      textArea.select()
+      
+      const successful = document.execCommand('copy')
+      document.body.removeChild(textArea)
+      
+      if (successful) {
+        showToast('合計をクリップボードにコピーしました')
+      } else {
+        throw new Error('execCommand copy failed')
+      }
+    } catch {
+      showToast('クリップボードへのコピーに失敗しました', TOAST_DURATIONS.LONG)
     }
   }
 
@@ -114,15 +176,15 @@ function Calc() {
       {toastMessage && (
         <Box
           position="fixed"
-          top={20}
+          top={UI_CONSTANTS.TOAST_POSITION_TOP}
           right={4}
-          bg="blue.500"
+          bg={colorStyles.accent.blue.button}
           color="white"
           px={4}
           py={2}
           rounded="md"
           shadow="lg"
-          zIndex={1000}>
+          zIndex={UI_CONSTANTS.TOAST_Z_INDEX}>
           {toastMessage}
         </Box>
       )}
@@ -147,19 +209,17 @@ function Calc() {
             <select
               value={mode} 
               onChange={(e) => setMode(e.target.value as Mode)}
+              className="calc-select"
               style={{
-                background: colorStyles.bg.primary,
-                color: '#1A202C', // ライトモードでもダークモードでも見やすい濃い色
-                border: `1px solid ${colorStyles.border.default}`,
                 borderRadius: '6px',
                 padding: '8px 12px',
                 fontSize: '14px',
                 width: '100%'
               }}>
-              <option value="perLineFirstNumber" style={{ color: '#1A202C', backgroundColor: colorStyles.bg.primary }}>
+              <option value="perLineFirstNumber">
                 行ごとに最初の数値を合計
               </option>
-              <option value="allNumbersInText" style={{ color: '#1A202C', backgroundColor: colorStyles.bg.primary }}>
+              <option value="allNumbersInText">
                 全文中のすべての数値を合計
               </option>
             </select>
@@ -172,11 +232,11 @@ function Calc() {
               colorScheme="red"
               size={{ base: 'sm', md: 'md' }}
               bg={colorStyles.bg.primary}
-              color="red.600"
-              borderColor="red.200"
+              color={colorStyles.accent.red.text}
+              borderColor={colorStyles.accent.red.border}
               _hover={{
-                bg: "red.50",
-                borderColor: "red.300"
+                bg: colorStyles.accent.red.bg,
+                borderColor: colorStyles.accent.red.borderHover
               }}>
               クリア
             </Button>
@@ -184,10 +244,10 @@ function Calc() {
               onClick={handlePasteFromClipboard}
               colorScheme="blue"
               size={{ base: 'sm', md: 'md' }}
-              bg="blue.500"
+              bg={colorStyles.accent.blue.button}
               color="white"
               _hover={{
-                bg: "blue.600"
+                bg: colorStyles.accent.blue.buttonHover
               }}>
               クリップボードから貼り付け
             </Button>
@@ -212,14 +272,11 @@ function Calc() {
           color={colorStyles.text.primary}
           borderColor={colorStyles.border.input}
           _focus={{
-            borderColor: 'blue.500',
-            boxShadow: '0 0 0 1px #3182CE'
+            borderColor: colorStyles.accent.blue.focus,
+            boxShadow: `0 0 0 1px ${colorStyles.accent.blue.focus}`
           }}
           resize="vertical"
         />
-        <Text fontSize="xs" color={colorStyles.text.muted} mt={1}>
-          ヒント: Ctrl/Cmd + Enter で計算結果を通知表示
-        </Text>
       </Box>
 
       {/* 結果表示 */}
@@ -272,24 +329,24 @@ function Result({ sum, count, numbers, errors, onCopySum }: {
           p={4} 
           rounded="lg" 
           border="1px solid" 
-          borderColor="blue.200"
+          borderColor={colorStyles.accent.blue.border}
           cursor="pointer"
           onClick={onCopySum}
           _hover={{
-            borderColor: "blue.300",
-            transform: 'scale(1.02)',
+            borderColor: colorStyles.accent.blue.label,
+            transform: `scale(${UI_CONSTANTS.SCALE_HOVER})`,
             shadow: 'md'
           }}
           transition="all 0.2s">
           <Text fontSize="sm" color={colorStyles.text.secondary} fontWeight="medium">
-            合計 <Text as="span" fontSize="xs" color="blue.500">
+            合計 <Text as="span" fontSize="xs" color={colorStyles.accent.blue.label}>
               (タップでコピー)
             </Text>
           </Text>
           <Text 
             fontSize={{ base: '2xl', md: '3xl' }}
             fontWeight="bold"
-            color="blue.600">
+            color={colorStyles.accent.blue.label}>
             {formatNumber(sum)}
           </Text>
           <Text fontSize="xs" color={colorStyles.text.muted}>すべての数値の合計</Text>
@@ -314,11 +371,11 @@ function Result({ sum, count, numbers, errors, onCopySum }: {
         <Box
           bg={colorStyles.bg.secondary}
           border="1px solid"
-          borderColor="orange.200"
+          borderColor={colorStyles.accent.orange.border}
           p={4}
           rounded="lg"
           mb={4}>
-          <Text color="orange.700" fontWeight="medium">
+          <Text color={colorStyles.accent.orange.label} fontWeight="medium">
             ⚠️ {errors.length}行で数値が見つかりませんでした
           </Text>
           <Button
@@ -326,20 +383,20 @@ function Result({ sum, count, numbers, errors, onCopySum }: {
             variant="ghost"
             onClick={() => setShowDetails(!showDetails)}
             mt={2}
-            color="orange.600"
+            color={colorStyles.accent.orange.text}
             bg="transparent"
             border="1px solid"
-            borderColor="orange.300"
+            borderColor={colorStyles.accent.orange.border}
             _hover={{
-              bg: "orange.50",
-              borderColor: "orange.400"
+              bg: colorStyles.accent.orange.bg,
+              borderColor: colorStyles.accent.orange.borderHover
             }}>
             {showDetails ? '詳細を隠す' : '詳細を表示'}
           </Button>
           {showDetails && (
             <Box mt={3}>
               {errors.map((error, i) => (
-                <Text key={i} fontSize="sm" color="orange.600" mb={1}>
+                <Text key={i} fontSize="sm" color={colorStyles.accent.orange.text} mb={1}>
                   • {error}
                 </Text>
               ))}
@@ -353,24 +410,24 @@ function Result({ sum, count, numbers, errors, onCopySum }: {
         <Box
           bg={colorStyles.bg.secondary}
           border="1px solid"
-          borderColor="blue.200"
+          borderColor={colorStyles.accent.blue.border}
           p={4}
           rounded="lg">
           <Flex justify="space-between" align="center" mb={2}>
-            <Text color="blue.700" fontWeight="medium">
+            <Text color={colorStyles.accent.blue.label} fontWeight="medium">
               抽出された数値 ({numbers.length}個)
             </Text>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => setShowNumbers(!showNumbers)}
-              color="blue.600"
+              color={colorStyles.accent.blue.label}
               bg="transparent"
               border="1px solid"
-              borderColor="blue.300"
+              borderColor={colorStyles.accent.blue.label}
               _hover={{
-                bg: "blue.50",
-                borderColor: "blue.400"
+                bg: colorStyles.bg.secondary,
+                borderColor: colorStyles.accent.blue.text
               }}>
               {showNumbers ? '隠す' : '表示'}
             </Button>
@@ -378,23 +435,23 @@ function Result({ sum, count, numbers, errors, onCopySum }: {
           
           {showNumbers && (
             <Box>
-              <Text fontSize="sm" color="blue.600" mb={2}>
+              <Text fontSize="sm" color={colorStyles.accent.blue.label} mb={2}>
                 抽出された数値の一覧:
               </Text>
               <Flex wrap="wrap" gap={2}>
-                {numbers.slice(0, 50).map((num, i) => (
+                {numbers.slice(0, UI_CONSTANTS.NUMBERS_DISPLAY_LIMIT).map((num, i) => (
                   <Box 
                     key={i} 
-                    bg="blue.100"
+                    bg={colorStyles.accent.blue.bg}
                     px={2}
                     py={1}
                     rounded="md"
                     fontSize="xs"
-                    color="blue.800">
+                    color={colorStyles.accent.blue.text}>
                     {formatNumber(num)}
                   </Box>
                 ))}
-                {numbers.length > 50 && (
+                {numbers.length > UI_CONSTANTS.NUMBERS_DISPLAY_LIMIT && (
                   <Box 
                     bg={colorStyles.bg.secondary}
                     px={2}
@@ -402,7 +459,7 @@ function Result({ sum, count, numbers, errors, onCopySum }: {
                     rounded="md"
                     fontSize="xs"
                     color={colorStyles.text.secondary}>
-                    ...他{numbers.length - 50}個
+                    ...他{numbers.length - UI_CONSTANTS.NUMBERS_DISPLAY_LIMIT}個
                   </Box>
                 )}
               </Flex>

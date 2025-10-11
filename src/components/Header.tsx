@@ -5,16 +5,26 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Menu, X, Moon, Sun } from 'lucide-react'
 import { useState } from 'react'
 import { useColorMode } from './ColorModeProvider'
+import { useColorStyles } from '../hooks/useColorStyles'
+
+// 定数定義
+const HEADER_CONSTANTS = {
+  Z_INDEX: 1000,
+  ICON_SIZE: 16,
+  HEIGHT_BASE: 16,
+  HEIGHT_MD: 14,
+} as const
 
 const NavItem = ({ to, children, onClick }: { to: string; children: React.ReactNode; onClick?: () => void }) => {
   const location = useLocation()
   const isActive = location.pathname === to
   const { colorMode } = useColorMode()
+  const colorStyles = useColorStyles()
   
   const activeColor = colorMode === 'light' ? '#3182CE' : '#90CDF4'
-  const textColor = colorMode === 'light' ? '#4A5568' : '#E2E8F0'
+  const textColor = colorStyles.text.secondary
   const activeBg = colorMode === 'light' ? '#EBF8FF' : '#1A365D'
-  const hoverBg = colorMode === 'light' ? '#F7FAFC' : '#2D3748'
+  const hoverBg = colorStyles.bg.secondary
   
   return (
     <NavLink 
@@ -49,12 +59,10 @@ const NavItem = ({ to, children, onClick }: { to: string; children: React.ReactN
 export default function Header() {
   const [isOpen, setIsOpen] = useState(false)
   const { colorMode, toggleColorMode } = useColorMode()
+  const colorStyles = useColorStyles()
   
   const onToggle = () => setIsOpen(!isOpen)
   const closeMenu = () => setIsOpen(false)
-  
-  const bg = colorMode === 'light' ? 'white' : 'gray.800'
-  const border = colorMode === 'light' ? 'gray.200' : 'gray.600'
 
   return (
     <>
@@ -64,14 +72,14 @@ export default function Header() {
         top={0} 
         left={0} 
         right={0} 
-        zIndex={1000}
-        bg={bg} 
+        zIndex={HEADER_CONSTANTS.Z_INDEX}
+        bg={colorStyles.bg.primary} 
         borderBottom="1px solid" 
-        borderColor={border} 
+        borderColor={colorStyles.border.default} 
         backdropFilter="saturate(180%) blur(8px)"
         shadow="sm">
         <Container maxW="container.xl" px={{ base: 4, md: 6 }}>
-          <Flex h={{ base: 16, md: 14 }} align="center" justify="space-between">
+          <Flex h={{ base: HEADER_CONSTANTS.HEIGHT_BASE, md: HEADER_CONSTANTS.HEIGHT_MD }} align="center" justify="space-between">
             {/* ロゴ */}
             <Box>
               <Link
@@ -104,12 +112,12 @@ export default function Header() {
                 size="sm"
                 variant="ghost"
                 bg="transparent"
-                color={colorMode === 'light' ? 'gray.700' : 'gray.200'}
+                color={colorStyles.text.secondary}
                 _hover={{
-                  bg: colorMode === 'light' ? 'gray.100' : 'gray.700',
-                  color: colorMode === 'light' ? 'gray.900' : 'white'
+                  bg: colorStyles.bg.secondary,
+                  color: colorStyles.text.primary
                 }}>
-                {colorMode === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+                {colorMode === 'light' ? <Moon size={HEADER_CONSTANTS.ICON_SIZE} /> : <Sun size={HEADER_CONSTANTS.ICON_SIZE} />}
               </Button>
             </Flex>
 
@@ -121,12 +129,12 @@ export default function Header() {
                 size="sm"
                 variant="ghost"
                 bg="transparent"
-                color={colorMode === 'light' ? 'gray.700' : 'gray.200'}
+                color={colorStyles.text.secondary}
                 _hover={{
-                  bg: colorMode === 'light' ? 'gray.100' : 'gray.700',
-                  color: colorMode === 'light' ? 'gray.900' : 'white'
+                  bg: colorStyles.bg.secondary,
+                  color: colorStyles.text.primary
                 }}>
-                {colorMode === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+                {colorMode === 'light' ? <Moon size={HEADER_CONSTANTS.ICON_SIZE} /> : <Sun size={HEADER_CONSTANTS.ICON_SIZE} />}
               </Button>
               <Button
                 aria-label={isOpen ? 'メニューを閉じる' : 'メニューを開く'}
@@ -134,12 +142,12 @@ export default function Header() {
                 size="sm"
                 variant="ghost"
                 bg="transparent"
-                color={colorMode === 'light' ? 'gray.700' : 'gray.200'}
+                color={colorStyles.text.secondary}
                 _hover={{
-                  bg: colorMode === 'light' ? 'gray.100' : 'gray.700',
-                  color: colorMode === 'light' ? 'gray.900' : 'white'
+                  bg: colorStyles.bg.secondary,
+                  color: colorStyles.text.primary
                 }}>
-                {isOpen ? <X size={16} /> : <Menu size={16} />}
+                {isOpen ? <X size={HEADER_CONSTANTS.ICON_SIZE} /> : <Menu size={HEADER_CONSTANTS.ICON_SIZE} />}
               </Button>
             </Flex>
           </Flex>
@@ -150,8 +158,8 @@ export default function Header() {
           <Box 
             display={{ md: 'none' }} 
             borderTop="1px solid" 
-            borderColor={border}
-            bg={bg}
+            borderColor={colorStyles.border.default}
+            bg={colorStyles.bg.primary}
             shadow="lg">
             <Container maxW="container.xl" px={4} py={3}>
               <Flex direction="column" gap={1}>
@@ -164,7 +172,7 @@ export default function Header() {
       </Box>
 
       {/* ヘッダーの高さ分のスペーサー */}
-      <Box h={{ base: 16, md: 14 }} />
+      <Box h={{ base: HEADER_CONSTANTS.HEIGHT_BASE, md: HEADER_CONSTANTS.HEIGHT_MD }} />
     </>
   )
 }

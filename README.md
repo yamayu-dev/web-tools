@@ -32,10 +32,15 @@ npm install
 ### 開発サーバーの起動
 
 ```bash
+# ローカル開発用
 npm run dev
+
+# ネットワークアクセス可能で起動（同じWi-Fiのスマートフォンからアクセス可能）
+npm run dev -- --host
 ```
 
-ブラウザで `http://localhost:5173/web-tools/` を開く
+ローカル: `http://localhost:5173/web-tools/`  
+ネットワーク: `http://[IP]:5173/web-tools/`
 
 ### コードの品質チェック
 
@@ -69,6 +74,14 @@ src/
 
 ## デプロイ
 
+### GitHub Pages自動デプロイ設定
+
+このプロジェクトはGitHub Actionsによる自動デプロイが設定されています：
+
+1. **ワークフロー**: `.github/workflows/pages.yml`
+2. **トリガー**: `main`ブランチへのプッシュ
+3. **デプロイ先**: https://yamayu-dev.github.io/web-tools/
+
 ### ビルド
 
 ```bash
@@ -80,12 +93,20 @@ npm run build
 
 ### GitHub Pagesへのデプロイ
 
+このプロジェクトは GitHub Actions を使用して自動デプロイされます。
+
+**自動デプロイ（推奨）**：
+- `main` ブランチにプッシュすると自動的に GitHub Pages にデプロイされます
+- `.github/workflows/pages.yml` でワークフローが定義されています
+- デプロイ先: https://yamayu-dev.github.io/web-tools/
+
+**手動ビルドの確認**：
 ```bash
-# ビルドとデプロイを実行
+# ローカルでビルドをテスト
 npm run build
 
-# GitHub Pagesに手動デプロイする場合
-# dist/フォルダの内容をgh-pagesブランチにpush
+# ビルド結果をプレビュー
+npm run preview
 ```
 
 ### プレビュー
@@ -95,7 +116,7 @@ npm run build
 npm run preview
 ```
 
-## 🎨 開発ガイドライン
+## 開発ガイドライン
 
 ### コンポーネント設計
 
@@ -109,6 +130,14 @@ npm run preview
 1. `src/pages/` に新しいページコンポーネントを作成
 2. `src/App.tsx` にルートを追加
 3. ホーム画面にリンクを追加
+
+### デプロイフロー
+
+1. 機能開発・修正を実施
+2. ローカルでビルドテスト: `npm run build`
+3. `main` ブランチにプッシュ
+4. GitHub Actions が自動的にビルド・デプロイを実行
+5. https://yamayu-dev.github.io/web-tools/ で確認
 
 ## トラブルシューティング
 
@@ -130,6 +159,22 @@ npx tsc --noEmit
 npm run lint
 ```
 
+**Q: スマートフォンからアクセスできない**
+```bash
+# MacのIPアドレスを確認
+ifconfig | grep "inet " | grep -v 127.0.0.1
+
+# ネットワーク対応で開発サーバー起動
+npm run dev -- --host
+
+# ファイアウォール設定を確認（Mac）
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
+```
+- 同じWi-Fiネットワークに接続されているか確認
+- Macのファイアウォールでポート5173が許可されているか確認
+
 **Q: GitHub Pagesで404エラー**
-- `vite.config.ts` の `base` 設定を確認
-- `scripts/copy-404.js` が実行されているか確認
+- リポジトリの Settings > Pages で Source が「GitHub Actions」になっているか確認
+- `vite.config.ts` の `base: '/web-tools/'` 設定を確認
+- `scripts/copy-404.js` が実行されているか確認（SPAの404対応）
+- GitHub Actions ワークフローが正常に実行されているか Actions タブで確認
