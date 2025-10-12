@@ -6,15 +6,7 @@ import { Menu, X, Moon, Sun } from 'lucide-react'
 import { useState } from 'react'
 import { useColorMode } from './ColorModeProvider'
 import { useColorStyles } from '../hooks/useColorStyles'
-
-// 定数定義
-const HEADER_CONSTANTS = {
-  Z_INDEX: 1000,
-  ICON_SIZE: 16,
-  HEIGHT_BASE: 16,
-  HEIGHT_MD: 14,
-} as const
-
+import { UI_CONSTANTS } from '../constants/uiConstants'
 const NavItem = ({ to, children, onClick }: { to: string; children: React.ReactNode; onClick?: () => void }) => {
   const location = useLocation()
   const isActive = location.pathname === to
@@ -72,14 +64,14 @@ export default function Header() {
         top={0} 
         left={0} 
         right={0} 
-        zIndex={HEADER_CONSTANTS.Z_INDEX}
+        zIndex={UI_CONSTANTS.HEADER_Z_INDEX}
         bg={colorStyles.bg.primary} 
         borderBottom="1px solid" 
         borderColor={colorStyles.border.default} 
         backdropFilter="saturate(180%) blur(8px)"
         shadow="sm">
         <Container maxW="container.xl" px={{ base: 4, md: 6 }}>
-          <Flex h={{ base: HEADER_CONSTANTS.HEIGHT_BASE, md: HEADER_CONSTANTS.HEIGHT_MD }} align="center" justify="space-between">
+          <Flex h={{ base: UI_CONSTANTS.HEADER_HEIGHT_BASE, md: UI_CONSTANTS.HEADER_HEIGHT_MD }} align="center" justify="space-between">
             {/* ロゴ */}
             <Box>
               <Link
@@ -106,6 +98,7 @@ export default function Header() {
             <Flex gap={2} display={{ base: 'none', md: 'flex' }} align="center">
               <NavItem to="/">Home</NavItem>
               <NavItem to="/calc">計算</NavItem>
+              <NavItem to="/icon-maker">アイコン</NavItem>
               <Button
                 aria-label="カラーモード切り替え"
                 onClick={toggleColorMode}
@@ -117,7 +110,7 @@ export default function Header() {
                   bg: colorStyles.bg.secondary,
                   color: colorStyles.text.primary
                 }}>
-                {colorMode === 'light' ? <Moon size={HEADER_CONSTANTS.ICON_SIZE} /> : <Sun size={HEADER_CONSTANTS.ICON_SIZE} />}
+                {colorMode === 'light' ? <Moon size={UI_CONSTANTS.ICON_SIZE_SM} /> : <Sun size={UI_CONSTANTS.ICON_SIZE_SM} />}
               </Button>
             </Flex>
 
@@ -134,7 +127,7 @@ export default function Header() {
                   bg: colorStyles.bg.secondary,
                   color: colorStyles.text.primary
                 }}>
-                {colorMode === 'light' ? <Moon size={HEADER_CONSTANTS.ICON_SIZE} /> : <Sun size={HEADER_CONSTANTS.ICON_SIZE} />}
+                {colorMode === 'light' ? <Moon size={UI_CONSTANTS.ICON_SIZE_SM} /> : <Sun size={UI_CONSTANTS.ICON_SIZE_SM} />}
               </Button>
               <Button
                 aria-label={isOpen ? 'メニューを閉じる' : 'メニューを開く'}
@@ -147,7 +140,7 @@ export default function Header() {
                   bg: colorStyles.bg.secondary,
                   color: colorStyles.text.primary
                 }}>
-                {isOpen ? <X size={HEADER_CONSTANTS.ICON_SIZE} /> : <Menu size={HEADER_CONSTANTS.ICON_SIZE} />}
+                {isOpen ? <X size={UI_CONSTANTS.ICON_SIZE_SM} /> : <Menu size={UI_CONSTANTS.ICON_SIZE_SM} />}
               </Button>
             </Flex>
           </Flex>
@@ -165,6 +158,7 @@ export default function Header() {
               <Flex direction="column" gap={1}>
                 <NavItem to="/" onClick={closeMenu}>Home</NavItem>
                 <NavItem to="/calc" onClick={closeMenu}>計算</NavItem>
+                <NavItem to="/icon-maker" onClick={closeMenu}>アイコン</NavItem>
               </Flex>
             </Container>
           </Box>
@@ -172,7 +166,7 @@ export default function Header() {
       </Box>
 
       {/* ヘッダーの高さ分のスペーサー */}
-      <Box h={{ base: HEADER_CONSTANTS.HEIGHT_BASE, md: HEADER_CONSTANTS.HEIGHT_MD }} />
+      <Box h={{ base: UI_CONSTANTS.HEADER_HEIGHT_BASE, md: UI_CONSTANTS.HEADER_HEIGHT_MD }} />
     </>
   )
 }

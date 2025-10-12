@@ -1,9 +1,10 @@
 import { Route, Routes, NavLink } from 'react-router-dom'
 import { Box } from '@chakra-ui/react'
-import { Calculator } from 'lucide-react'
+import { Calculator, Palette } from 'lucide-react'
 import { useColorStyles } from './hooks/useColorStyles'
 import Header from './components/Header'
 import Calc from './pages/Calc.tsx'
+import IconMaker from './pages/IconMaker.tsx'
 import './App.css'
 
 // 定数定義
@@ -20,6 +21,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/calc" element={<Calc />} />
+          <Route path="/icon-maker" element={<IconMaker />} />
         </Routes>
       </Box>
     </>
@@ -46,7 +48,10 @@ function Home() {
           as="ul"
           listStyleType="none"
           m={0}
-          p={0}>
+          p={0}
+          gap={4}
+          display="flex"
+          flexDirection="column">
           <Box
             as="li"
             p={3}
@@ -72,6 +77,33 @@ function Home() {
               }}>
               <Calculator size={APP_CONSTANTS.CALCULATOR_ICON_SIZE} />
               計算ツール - 改行テキストの数値合計
+            </NavLink>
+          </Box>
+          <Box
+            as="li"
+            p={3}
+            bg={colorStyles.accent.blue.cardBg}
+            border="1px solid"
+            borderColor={colorStyles.accent.blue.cardBorder}
+            rounded="md"
+            _hover={{
+              bg: colorStyles.accent.blue.cardHover
+            }}
+            transition="background-color 0.2s">
+            <NavLink 
+              to="/icon-maker"
+              style={{
+                textDecoration: 'none',
+                color: colorStyles.accent.blue.linkColor,
+                fontWeight: 'medium',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: APP_CONSTANTS.GAP_SIZE,
+                width: '100%'
+              }}>
+              <Palette size={APP_CONSTANTS.CALCULATOR_ICON_SIZE} />
+              アイコンメーカー - 美しいアイコンを簡単作成
             </NavLink>
           </Box>
         </Box>

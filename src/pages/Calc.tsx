@@ -11,25 +11,9 @@ import {
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { formatNumber, parseNumbers } from '../utils/numberUtils'
+import { writeToClipboard, getClipboardMessages } from '../utils/clipboardUtils'
+import { TOAST_DURATIONS, UI_CONSTANTS } from '../constants/uiConstants'
 import type { Mode } from '../types/calculator'
-
-// 定数定義
-const TOAST_DURATIONS = {
-  SHORT: 1000,
-  MEDIUM: 1500,
-  LONG: 3000,
-  ERROR: 2500,
-} as const
-
-const UI_CONSTANTS = {
-  NUMBERS_DISPLAY_LIMIT: 50,
-  TOAST_POSITION_TOP: 20,
-  TOAST_Z_INDEX: 1000,
-  PASTE_DELAY: 100,
-  PASTE_CHECK_DELAY: 50,
-  PASTE_COMMAND_DELAY: 10,
-  SCALE_HOVER: 1.02,
-} as const
 
 export function Calc() {
   const [text, setText] = useState<string>('')
@@ -125,34 +109,12 @@ export function Calc() {
   }
 
   const handleCopySum = async () => {
+    const messages = getClipboardMessages()
     try {
-      // HTTPS環境またはlocalhostでは navigator.clipboard を使用
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(sum.toString())
-        showToast('合計をクリップボードにコピーしました')
-        return
-      }
-
-      // HTTP環境のフォールバック処理
-      const textArea = document.createElement('textarea')
-      textArea.value = sum.toString()
-      textArea.style.position = 'fixed'
-      textArea.style.left = '-999999px'
-      textArea.style.top = '-999999px'
-      document.body.appendChild(textArea)
-      textArea.focus()
-      textArea.select()
-      
-      const successful = document.execCommand('copy')
-      document.body.removeChild(textArea)
-      
-      if (successful) {
-        showToast('合計をクリップボードにコピーしました')
-      } else {
-        throw new Error('execCommand copy failed')
-      }
+      await writeToClipboard(sum.toString())
+      showToast(messages.copySuccess)
     } catch {
-      showToast('クリップボードへのコピーに失敗しました', TOAST_DURATIONS.LONG)
+      showToast(messages.copyError, TOAST_DURATIONS.LONG)
     }
   }
 
