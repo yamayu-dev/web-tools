@@ -103,7 +103,7 @@ function Home() {
                 width: '100%'
               }}>
               <Palette size={APP_CONSTANTS.CALCULATOR_ICON_SIZE} />
-              アイコンメーカー - アイコンを簡単作成
+              アイコンメーカー - アイコンを作成
             </NavLink>
           </Box>
         </Box>
