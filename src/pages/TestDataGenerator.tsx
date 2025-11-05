@@ -22,6 +22,10 @@ import {
   type CharEncoding,
   type DataType,
   type ColumnConfig,
+  type CharacterType,
+  type NameType,
+  type PhoneFormat,
+  type DateFormat,
   DEFAULT_TEST_DATA_CONFIG,
   DATA_TYPE_LABELS,
   FILE_FORMAT_LABELS,
@@ -667,7 +671,7 @@ export function TestDataGenerator() {
                         </Text>
                         <select
                           value={column.characterType ?? 'full-width'}
-                          onChange={(e) => updateColumn(column.id, { characterType: e.target.value as any })}
+                          onChange={(e) => updateColumn(column.id, { characterType: e.target.value as CharacterType })}
                           style={{
                             width: '100%',
                             padding: '6px 8px',
@@ -710,7 +714,7 @@ export function TestDataGenerator() {
                         </Text>
                         <select
                           value={column.nameType ?? 'japanese'}
-                          onChange={(e) => updateColumn(column.id, { nameType: e.target.value as any })}
+                          onChange={(e) => updateColumn(column.id, { nameType: e.target.value as NameType })}
                           style={{
                             width: '100%',
                             padding: '6px 8px',
@@ -733,7 +737,7 @@ export function TestDataGenerator() {
                         </Text>
                         <select
                           value={column.characterType ?? 'full-width'}
-                          onChange={(e) => updateColumn(column.id, { characterType: e.target.value as any })}
+                          onChange={(e) => updateColumn(column.id, { characterType: e.target.value as CharacterType })}
                           style={{
                             width: '100%',
                             padding: '6px 8px',
@@ -761,7 +765,7 @@ export function TestDataGenerator() {
                       </Text>
                       <select
                         value={column.phoneFormat ?? 'hyphen'}
-                        onChange={(e) => updateColumn(column.id, { phoneFormat: e.target.value as any })}
+                        onChange={(e) => updateColumn(column.id, { phoneFormat: e.target.value as PhoneFormat })}
                         style={{
                           width: '100%',
                           padding: '6px 8px',
@@ -788,7 +792,7 @@ export function TestDataGenerator() {
                       </Text>
                       <select
                         value={column.dateFormat ?? 'yyyy-mm-dd'}
-                        onChange={(e) => updateColumn(column.id, { dateFormat: e.target.value as any })}
+                        onChange={(e) => updateColumn(column.id, { dateFormat: e.target.value as DateFormat })}
                         style={{
                           width: '100%',
                           padding: '6px 8px',

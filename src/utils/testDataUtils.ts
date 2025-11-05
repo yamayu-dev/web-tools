@@ -413,7 +413,7 @@ export function importConfig(file: File): Promise<TestDataConfig> {
         const content = e.target?.result as string
         const config = JSON.parse(content) as TestDataConfig
         resolve(config)
-      } catch (error) {
+      } catch {
         reject(new Error('設定ファイルの読み込みに失敗しました'))
       }
     }
