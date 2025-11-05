@@ -76,5 +76,5 @@ export const FILENAME_VALIDATION_REGEX = /[^a-zA-Z0-9_-]/g
 /** レコード数の制限 */
 export const RECORD_COUNT_LIMITS = {
   MIN: 1,
-  MAX: 100000,
+  MAX: 1000000,
 } as const
