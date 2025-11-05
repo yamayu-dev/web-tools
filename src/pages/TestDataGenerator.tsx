@@ -11,7 +11,7 @@ import {
   Flex,
   Grid,
 } from '@chakra-ui/react'
-import { Download, Plus, Trash2 } from 'lucide-react'
+import { Download, Plus, Trash2, Upload, FileDown, ChevronUp, ChevronDown } from 'lucide-react'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useToast } from '../hooks/useToast'
 import { SelectableButton } from '../components/SelectableButton'
@@ -26,8 +26,12 @@ import {
   DATA_TYPE_LABELS,
   FILE_FORMAT_LABELS,
   CHAR_ENCODING_LABELS,
+  CHARACTER_TYPE_LABELS,
+  NAME_TYPE_LABELS,
+  PHONE_FORMAT_LABELS,
+  DATE_FORMAT_LABELS,
 } from '../types/testDataGenerator'
-import { generateTestData, downloadTestData } from '../utils/testDataUtils'
+import { generateTestData, downloadTestData, exportConfig, importConfig } from '../utils/testDataUtils'
 
 export function TestDataGenerator() {
   const [config, setConfig] = useState<TestDataConfig>(DEFAULT_TEST_DATA_CONFIG)
@@ -74,11 +78,33 @@ export function TestDataGenerator() {
     }))
   }
 
+  const moveColumnUp = (index: number) => {
+    if (index === 0) return
+    setConfig(prev => {
+      const newColumns = [...prev.columns]
+      const temp = newColumns[index]
+      newColumns[index] = newColumns[index - 1]
+      newColumns[index - 1] = temp
+      return { ...prev, columns: newColumns }
+    })
+  }
+
+  const moveColumnDown = (index: number) => {
+    if (index === config.columns.length - 1) return
+    setConfig(prev => {
+      const newColumns = [...prev.columns]
+      const temp = newColumns[index]
+      newColumns[index] = newColumns[index + 1]
+      newColumns[index + 1] = temp
+      return { ...prev, columns: newColumns }
+    })
+  }
+
   const handleGenerate = () => {
     try {
       const data = generateTestData(config)
       const extension = config.fileFormat === 'fixed-length' ? 'txt' : config.fileFormat
-      downloadTestData(data, `${filename}.${extension}`, config.encoding)
+      downloadTestData(data, `${filename}.${extension}`, config.encoding, config.zipDownload ?? false)
       showToast(`${filename}.${extension} をダウンロードしました`, TOAST_DURATIONS.MEDIUM)
     } catch (error) {
       console.error(error)
@@ -86,17 +112,80 @@ export function TestDataGenerator() {
     }
   }
 
+  const handleExportConfig = () => {
+    try {
+      exportConfig(config, 'testdata-config.json')
+      showToast('設定をエクスポートしました', TOAST_DURATIONS.MEDIUM)
+    } catch (error) {
+      console.error(error)
+      showToast('設定のエクスポートに失敗しました', TOAST_DURATIONS.ERROR)
+    }
+  }
+
+  const handleImportConfig = async (file: File) => {
+    try {
+      const importedConfig = await importConfig(file)
+      setConfig(importedConfig)
+      showToast('設定をインポートしました', TOAST_DURATIONS.MEDIUM)
+    } catch (error) {
+      console.error(error)
+      showToast('設定のインポートに失敗しました', TOAST_DURATIONS.ERROR)
+    }
+  }
+
   return (
     <Container maxW="container.xl" py={6} px={4} mx="auto">
       {/* ヘッダー */}
       <Box mb={6}>
-        <Heading 
-          as="h2" 
-          size={{ base: 'lg', md: 'xl' }}
-          color={colorStyles.text.primary}
-          mb={2}>
-          テストデータ作成
-        </Heading>
+        <Flex justify="space-between" align="center" mb={2}>
+          <Heading 
+            as="h2" 
+            size={{ base: 'lg', md: 'xl' }}
+            color={colorStyles.text.primary}>
+            テストデータ作成
+          </Heading>
+          <HStack gap={2}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleExportConfig}
+              colorScheme="blue"
+              bg={colorStyles.bg.primary}
+              color={colorStyles.text.primary}
+              borderColor={colorStyles.accent.blue.border}
+              _hover={{
+                bg: colorStyles.accent.blue.bg,
+                borderColor: colorStyles.accent.blue.text
+              }}>
+              <FileDown size={16} style={{ marginRight: '4px' }} />
+              設定保存
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const input = document.createElement('input')
+                input.type = 'file'
+                input.accept = '.json'
+                input.onchange = (e) => {
+                  const file = (e.target as HTMLInputElement).files?.[0]
+                  if (file) handleImportConfig(file)
+                }
+                input.click()
+              }}
+              colorScheme="blue"
+              bg={colorStyles.bg.primary}
+              color={colorStyles.text.primary}
+              borderColor={colorStyles.accent.blue.border}
+              _hover={{
+                bg: colorStyles.accent.blue.bg,
+                borderColor: colorStyles.accent.blue.text
+              }}>
+              <Upload size={16} style={{ marginRight: '4px' }} />
+              設定読込
+            </Button>
+          </HStack>
+        </Flex>
         <Text color={colorStyles.text.secondary} fontSize={{ base: 'sm', md: 'md' }}>
           CSV、TSV、固定長形式のテストデータを生成してダウンロードします
         </Text>
@@ -182,6 +271,36 @@ export function TestDataGenerator() {
                 isSelected={config.hasHeader}
                 onClick={() => updateConfig({ hasHeader: !config.hasHeader })}>
                 {config.hasHeader ? 'あり' : 'なし'}
+              </SelectableButton>
+            </Flex>
+          </Box>
+
+          {/* 全項目フル桁設定 */}
+          <Box>
+            <Flex justify="space-between" align="center">
+              <Text fontSize="sm" color={colorStyles.text.primary}>
+                全項目フル桁データ
+              </Text>
+              <SelectableButton
+                size="sm"
+                isSelected={config.fullWidthData ?? false}
+                onClick={() => updateConfig({ fullWidthData: !config.fullWidthData })}>
+                {config.fullWidthData ? 'ON' : 'OFF'}
+              </SelectableButton>
+            </Flex>
+          </Box>
+
+          {/* ZIP ダウンロード */}
+          <Box>
+            <Flex justify="space-between" align="center">
+              <Text fontSize="sm" color={colorStyles.text.primary}>
+                ZIP圧縮ダウンロード
+              </Text>
+              <SelectableButton
+                size="sm"
+                isSelected={config.zipDownload ?? false}
+                onClick={() => updateConfig({ zipDownload: !config.zipDownload })}>
+                {config.zipDownload ? 'ON' : 'OFF'}
               </SelectableButton>
             </Flex>
           </Box>
@@ -283,14 +402,42 @@ export function TestDataGenerator() {
                   <Text fontSize="sm" fontWeight="medium" color={colorStyles.text.primary}>
                     カラム {index + 1}
                   </Text>
-                  <Button
-                    size="xs"
-                    onClick={() => removeColumn(column.id)}
-                    colorScheme="red"
-                    variant="ghost"
-                    disabled={config.columns.length <= 1}>
-                    <Trash2 size={14} />
-                  </Button>
+                  <HStack gap={1}>
+                    <Button
+                      size="xs"
+                      onClick={() => moveColumnUp(index)}
+                      variant="ghost"
+                      color={colorStyles.text.secondary}
+                      _hover={{
+                        bg: colorStyles.bg.secondary
+                      }}
+                      disabled={index === 0}>
+                      <ChevronUp size={14} />
+                    </Button>
+                    <Button
+                      size="xs"
+                      onClick={() => moveColumnDown(index)}
+                      variant="ghost"
+                      color={colorStyles.text.secondary}
+                      _hover={{
+                        bg: colorStyles.bg.secondary
+                      }}
+                      disabled={index === config.columns.length - 1}>
+                      <ChevronDown size={14} />
+                    </Button>
+                    <Button
+                      size="xs"
+                      onClick={() => removeColumn(column.id)}
+                      colorScheme="red"
+                      variant="ghost"
+                      color={colorStyles.accent.red.text}
+                      _hover={{
+                        bg: colorStyles.accent.red.bg
+                      }}
+                      disabled={config.columns.length <= 1}>
+                      <Trash2 size={14} />
+                    </Button>
+                  </HStack>
                 </Flex>
 
                 <VStack align="stretch" gap={3}>
@@ -354,20 +501,35 @@ export function TestDataGenerator() {
 
                   {/* 連番の開始値 */}
                   {column.dataType === 'sequential' && (
-                    <Box>
-                      <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
-                        開始値
-                      </Text>
-                      <Input
-                        type="number"
-                        value={column.sequentialStart ?? 1}
-                        onChange={(e) => updateColumn(column.id, { sequentialStart: parseInt(e.target.value) || 1 })}
-                        size="sm"
-                        bg={colorStyles.bg.secondary}
-                        color={colorStyles.text.primary}
-                        borderColor={colorStyles.border.input}
-                      />
-                    </Box>
+                    <>
+                      <Box>
+                        <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                          開始値
+                        </Text>
+                        <Input
+                          type="number"
+                          value={column.sequentialStart ?? 1}
+                          onChange={(e) => updateColumn(column.id, { sequentialStart: parseInt(e.target.value) || 1 })}
+                          size="sm"
+                          bg={colorStyles.bg.secondary}
+                          color={colorStyles.text.primary}
+                          borderColor={colorStyles.border.input}
+                        />
+                      </Box>
+                      <Box>
+                        <Flex justify="space-between" align="center">
+                          <Text fontSize="xs" color={colorStyles.text.secondary}>
+                            先頭0埋め
+                          </Text>
+                          <SelectableButton
+                            size="xs"
+                            isSelected={column.zeroPadding ?? false}
+                            onClick={() => updateColumn(column.id, { zeroPadding: !column.zeroPadding })}>
+                            {column.zeroPadding ? 'ON' : 'OFF'}
+                          </SelectableButton>
+                        </Flex>
+                      </Box>
+                    </>
                   )}
 
                   {/* ランダム数値の範囲 */}
@@ -401,7 +563,266 @@ export function TestDataGenerator() {
                           borderColor={colorStyles.border.input}
                         />
                       </Box>
+                      <Box>
+                        <Flex justify="space-between" align="center">
+                          <Text fontSize="xs" color={colorStyles.text.secondary}>
+                            マイナス値許可
+                          </Text>
+                          <SelectableButton
+                            size="xs"
+                            isSelected={column.allowNegative ?? false}
+                            onClick={() => updateColumn(column.id, { allowNegative: !column.allowNegative })}>
+                            {column.allowNegative ? 'ON' : 'OFF'}
+                          </SelectableButton>
+                        </Flex>
+                      </Box>
+                      <Box>
+                        <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                          小数点桁数
+                        </Text>
+                        <Input
+                          type="number"
+                          value={column.decimalPlaces ?? 0}
+                          onChange={(e) => updateColumn(column.id, { decimalPlaces: Math.max(0, parseInt(e.target.value) || 0) })}
+                          min={0}
+                          max={10}
+                          size="sm"
+                          bg={colorStyles.bg.secondary}
+                          color={colorStyles.text.primary}
+                          borderColor={colorStyles.border.input}
+                        />
+                      </Box>
                     </>
+                  )}
+
+                  {/* 金額の設定 */}
+                  {column.dataType === 'amount' && (
+                    <>
+                      <Box>
+                        <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                          最小値
+                        </Text>
+                        <Input
+                          type="number"
+                          value={column.randomMin ?? 1000}
+                          onChange={(e) => updateColumn(column.id, { randomMin: parseInt(e.target.value) || 1000 })}
+                          size="sm"
+                          bg={colorStyles.bg.secondary}
+                          color={colorStyles.text.primary}
+                          borderColor={colorStyles.border.input}
+                        />
+                      </Box>
+                      <Box>
+                        <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                          最大値
+                        </Text>
+                        <Input
+                          type="number"
+                          value={column.randomMax ?? 1000000}
+                          onChange={(e) => updateColumn(column.id, { randomMax: parseInt(e.target.value) || 1000000 })}
+                          size="sm"
+                          bg={colorStyles.bg.secondary}
+                          color={colorStyles.text.primary}
+                          borderColor={colorStyles.border.input}
+                        />
+                      </Box>
+                      <Box>
+                        <Flex justify="space-between" align="center">
+                          <Text fontSize="xs" color={colorStyles.text.secondary}>
+                            マイナス値許可
+                          </Text>
+                          <SelectableButton
+                            size="xs"
+                            isSelected={column.allowNegative ?? false}
+                            onClick={() => updateColumn(column.id, { allowNegative: !column.allowNegative })}>
+                            {column.allowNegative ? 'ON' : 'OFF'}
+                          </SelectableButton>
+                        </Flex>
+                      </Box>
+                      <Box>
+                        <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                          小数点桁数
+                        </Text>
+                        <Input
+                          type="number"
+                          value={column.decimalPlaces ?? 0}
+                          onChange={(e) => updateColumn(column.id, { decimalPlaces: Math.max(0, parseInt(e.target.value) || 0) })}
+                          min={0}
+                          max={10}
+                          size="sm"
+                          bg={colorStyles.bg.secondary}
+                          color={colorStyles.text.primary}
+                          borderColor={colorStyles.border.input}
+                        />
+                      </Box>
+                    </>
+                  )}
+
+                  {/* テキストの設定 */}
+                  {column.dataType === 'text' && (
+                    <>
+                      <Box>
+                        <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                          文字種別
+                        </Text>
+                        <select
+                          value={column.characterType ?? 'full-width'}
+                          onChange={(e) => updateColumn(column.id, { characterType: e.target.value as any })}
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            backgroundColor: colorStyles.bg.secondary,
+                            color: colorStyles.text.primary,
+                            border: `1px solid ${colorStyles.border.input}`,
+                          }}>
+                          {Object.entries(CHARACTER_TYPE_LABELS).map(([key, label]) => (
+                            <option key={key} value={key}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </Box>
+                      <Box>
+                        <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                          最大文字長
+                        </Text>
+                        <Input
+                          type="number"
+                          value={column.textLength ?? 20}
+                          onChange={(e) => updateColumn(column.id, { textLength: Math.max(1, parseInt(e.target.value) || 20) })}
+                          size="sm"
+                          bg={colorStyles.bg.secondary}
+                          color={colorStyles.text.primary}
+                          borderColor={colorStyles.border.input}
+                        />
+                      </Box>
+                    </>
+                  )}
+
+                  {/* 名前の設定 */}
+                  {column.dataType === 'name' && (
+                    <>
+                      <Box>
+                        <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                          名前種別
+                        </Text>
+                        <select
+                          value={column.nameType ?? 'japanese'}
+                          onChange={(e) => updateColumn(column.id, { nameType: e.target.value as any })}
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            backgroundColor: colorStyles.bg.secondary,
+                            color: colorStyles.text.primary,
+                            border: `1px solid ${colorStyles.border.input}`,
+                          }}>
+                          {Object.entries(NAME_TYPE_LABELS).map(([key, label]) => (
+                            <option key={key} value={key}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </Box>
+                      <Box>
+                        <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                          文字種別
+                        </Text>
+                        <select
+                          value={column.characterType ?? 'full-width'}
+                          onChange={(e) => updateColumn(column.id, { characterType: e.target.value as any })}
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            fontSize: '14px',
+                            backgroundColor: colorStyles.bg.secondary,
+                            color: colorStyles.text.primary,
+                            border: `1px solid ${colorStyles.border.input}`,
+                          }}>
+                          {Object.entries(CHARACTER_TYPE_LABELS).map(([key, label]) => (
+                            <option key={key} value={key}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </Box>
+                    </>
+                  )}
+
+                  {/* 電話番号の設定 */}
+                  {column.dataType === 'phone' && (
+                    <Box>
+                      <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                        フォーマット
+                      </Text>
+                      <select
+                        value={column.phoneFormat ?? 'hyphen'}
+                        onChange={(e) => updateColumn(column.id, { phoneFormat: e.target.value as any })}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          backgroundColor: colorStyles.bg.secondary,
+                          color: colorStyles.text.primary,
+                          border: `1px solid ${colorStyles.border.input}`,
+                        }}>
+                        {Object.entries(PHONE_FORMAT_LABELS).map(([key, label]) => (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </Box>
+                  )}
+
+                  {/* 日付の設定 */}
+                  {column.dataType === 'date' && (
+                    <Box>
+                      <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                        フォーマット
+                      </Text>
+                      <select
+                        value={column.dateFormat ?? 'yyyy-mm-dd'}
+                        onChange={(e) => updateColumn(column.id, { dateFormat: e.target.value as any })}
+                        style={{
+                          width: '100%',
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          backgroundColor: colorStyles.bg.secondary,
+                          color: colorStyles.text.primary,
+                          border: `1px solid ${colorStyles.border.input}`,
+                        }}>
+                        {Object.entries(DATE_FORMAT_LABELS).map(([key, label]) => (
+                          <option key={key} value={key}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </Box>
+                  )}
+
+                  {/* 固定値の設定 */}
+                  {column.dataType === 'fixed' && (
+                    <Box>
+                      <Text fontSize="xs" color={colorStyles.text.secondary} mb={1}>
+                        固定値
+                      </Text>
+                      <Input
+                        value={column.fixedValue ?? ''}
+                        onChange={(e) => updateColumn(column.id, { fixedValue: e.target.value })}
+                        placeholder="固定値を入力"
+                        size="sm"
+                        bg={colorStyles.bg.secondary}
+                        color={colorStyles.text.primary}
+                        borderColor={colorStyles.border.input}
+                      />
+                    </Box>
                   )}
                 </VStack>
               </Box>
