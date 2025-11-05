@@ -15,7 +15,7 @@ import { Download, Plus, Trash2 } from 'lucide-react'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useToast } from '../hooks/useToast'
 import { SelectableButton } from '../components/SelectableButton'
-import { TOAST_DURATIONS, UI_CONSTANTS } from '../constants/uiConstants'
+import { TOAST_DURATIONS, UI_CONSTANTS, FILENAME_VALIDATION_REGEX, RECORD_COUNT_LIMITS } from '../constants/uiConstants'
 import {
   type TestDataConfig,
   type FileFormat,
@@ -231,9 +231,13 @@ export function TestDataGenerator() {
             <Input
               type="number"
               value={config.recordCount}
-              onChange={(e) => updateConfig({ recordCount: Math.max(1, parseInt(e.target.value) || 1) })}
-              min={1}
-              max={100000}
+              onChange={(e) => {
+                const value = parseInt(e.target.value) || RECORD_COUNT_LIMITS.MIN
+                const clampedValue = Math.max(RECORD_COUNT_LIMITS.MIN, Math.min(RECORD_COUNT_LIMITS.MAX, value))
+                updateConfig({ recordCount: clampedValue })
+              }}
+              min={RECORD_COUNT_LIMITS.MIN}
+              max={RECORD_COUNT_LIMITS.MAX}
               bg={colorStyles.bg.primary}
               color={colorStyles.text.primary}
               borderColor={colorStyles.border.input}
@@ -426,7 +430,7 @@ export function TestDataGenerator() {
             </Text>
             <Input
               value={filename}
-              onChange={(e) => setFilename(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
+              onChange={(e) => setFilename(e.target.value.replace(FILENAME_VALIDATION_REGEX, ''))}
               placeholder="testdata"
               bg={colorStyles.bg.primary}
               color={colorStyles.text.primary}

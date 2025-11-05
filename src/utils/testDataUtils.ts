@@ -21,6 +21,14 @@ const EMAIL_DOMAINS = [
   'example.com', 'test.jp', 'sample.co.jp', 'demo.com', 'mail.jp'
 ]
 
+/** 金額の範囲 */
+const AMOUNT_MIN = 1000
+const AMOUNT_MAX = 1000000
+
+/** 日付の範囲 */
+const DATE_RANGE_START = new Date(2020, 0, 1)
+const DATE_RANGE_END = new Date(2025, 11, 31)
+
 /**
  * 指定されたデータ型に基づいて値を生成
  */
@@ -64,15 +72,15 @@ export function generateValue(
     }
     
     case 'amount': {
-      // 金額: 1,000 ~ 1,000,000の範囲
-      const amount = Math.floor(Math.random() * 999000) + 1000
+      // 金額の範囲で生成
+      const amount = Math.floor(Math.random() * (AMOUNT_MAX - AMOUNT_MIN)) + AMOUNT_MIN
       return amount.toLocaleString('ja-JP')
     }
     
     case 'date': {
-      // 日付: 2020-01-01 ~ 2024-12-31の範囲
-      const start = new Date(2020, 0, 1).getTime()
-      const end = new Date(2024, 11, 31).getTime()
+      // 指定された日付範囲で生成
+      const start = DATE_RANGE_START.getTime()
+      const end = DATE_RANGE_END.getTime()
       const randomTime = start + Math.random() * (end - start)
       const date = new Date(randomTime)
       return date.toISOString().split('T')[0]
@@ -190,12 +198,13 @@ export function downloadTestData(
     blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
   } else if (encoding === 'Shift_JIS') {
     // Shift_JISはブラウザで直接エンコードできないため、UTF-8でダウンロード
-    // 実際のプロダクションではライブラリを使用する必要がある
-    console.warn('Shift_JIS encoding is not fully supported in browser, falling back to UTF-8')
+    // 実際のプロダクション環境では、encoding-japanese等のライブラリを使用して適切なエンコーディングを行う必要があります
+    console.warn('Shift_JIS encoding is not fully supported in browser without external libraries, falling back to UTF-8')
     blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
   } else if (encoding === 'EUC-JP') {
     // EUC-JPもブラウザで直接エンコードできないため、UTF-8でダウンロード
-    console.warn('EUC-JP encoding is not fully supported in browser, falling back to UTF-8')
+    // 実際のプロダクション環境では、encoding-japanese等のライブラリを使用して適切なエンコーディングを行う必要があります
+    console.warn('EUC-JP encoding is not fully supported in browser without external libraries, falling back to UTF-8')
     blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
   } else {
     blob = new Blob([content], { type: 'text/plain;charset=utf-8' })

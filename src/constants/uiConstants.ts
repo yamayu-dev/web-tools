@@ -69,3 +69,12 @@ export const APP_CONFIG = {
   MAX_TEXT_LENGTH: 2, // アイコンテキストの最大文字数
   CORNER_RADIUS_RATIO: 0.125, // 角丸の半径比率
 } as const
+
+/** ファイル名の検証用正規表現 */
+export const FILENAME_VALIDATION_REGEX = /[^a-zA-Z0-9_-]/g
+
+/** レコード数の制限 */
+export const RECORD_COUNT_LIMITS = {
+  MIN: 1,
+  MAX: 100000,
+} as const
