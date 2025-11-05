@@ -99,6 +99,7 @@ export default function Header() {
               <NavItem to="/">Home</NavItem>
               <NavItem to="/calc">計算</NavItem>
               <NavItem to="/icon-maker">アイコン</NavItem>
+              <NavItem to="/test-data-generator">テストデータ</NavItem>
               <Button
                 aria-label="カラーモード切り替え"
                 onClick={toggleColorMode}
@@ -159,6 +160,7 @@ export default function Header() {
                 <NavItem to="/" onClick={closeMenu}>Home</NavItem>
                 <NavItem to="/calc" onClick={closeMenu}>計算</NavItem>
                 <NavItem to="/icon-maker" onClick={closeMenu}>アイコン</NavItem>
+                <NavItem to="/test-data-generator" onClick={closeMenu}>テストデータ</NavItem>
               </Flex>
             </Container>
           </Box>
