@@ -13,6 +13,7 @@ import { marked } from 'marked'
 import mermaid from 'mermaid'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
+import DOMPurify from 'dompurify'
 import { Download, Upload, FileText } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
@@ -45,10 +46,15 @@ export function MarkdownEditor() {
   // Markdownをレンダリング
   const renderedHTML = useMemo(() => {
     try {
-      return marked(markdown, { 
+      const rawHTML = marked(markdown, { 
         breaks: true,
         gfm: true
       }) as string
+      // DOMPurifyでHTMLをサニタイズ（XSS対策）
+      return DOMPurify.sanitize(rawHTML, {
+        ADD_TAGS: ['iframe'], // Mermaidで使用される可能性があるタグ
+        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] // iframe属性
+      })
     } catch (error) {
       console.error('Markdown parse error:', error)
       return '<p>Error rendering markdown</p>'
