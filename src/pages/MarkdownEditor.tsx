@@ -72,21 +72,23 @@ export function MarkdownEditor() {
       if (darkStyle) {
         darkStyle.disabled = colorMode === 'light'
       }
-      
-      // コードブロックを再ハイライト
-      if (previewRef.current) {
-        const codeBlocks = previewRef.current.querySelectorAll('pre code:not(.mermaid-diagram)')
-        codeBlocks.forEach((block) => {
-          // クラスをリセットしてから再適用
-          const classes = Array.from(block.classList).filter(cls => !cls.startsWith('hljs'))
-          block.className = classes.join(' ')
-          hljs.highlightElement(block as HTMLElement)
-        })
-      }
     }
     
     loadHighlightTheme()
   }, [colorMode])
+  
+  // ハイライトを再適用する関数
+  const reapplyHighlighting = () => {
+    if (!previewRef.current) return
+    
+    const codeBlocks = previewRef.current.querySelectorAll('pre code:not(.mermaid-diagram)')
+    codeBlocks.forEach((block) => {
+      // クラスをリセットしてから再適用
+      const classes = Array.from(block.classList).filter(cls => !cls.startsWith('hljs'))
+      block.className = classes.join(' ')
+      hljs.highlightElement(block as HTMLElement)
+    })
+  }
   
   useEffect(() => {
     if (isMobile && viewMode === 'split') {
@@ -128,7 +130,7 @@ export function MarkdownEditor() {
     }
 
     const renderMermaid = async () => {
-      const mermaidDivs = previewRef.current?.querySelectorAll('.mermaid-diagram')
+      const mermaidDivs = previewRef.current?.querySelectorAll('.mermaid-diagram:not(.mermaid-rendered)')
       if (!mermaidDivs || mermaidDivs.length === 0) return
       
       for (let i = 0; i < mermaidDivs.length; i++) {
@@ -146,20 +148,20 @@ export function MarkdownEditor() {
         }
         
         try {
-          const { svg } = await mermaid.render(`mermaid-${Date.now()}-${i}`, code)
-          // DOMPurserを使用してSVGを安全に挿入
-          const parser = new DOMParser()
-          const svgDoc = parser.parseFromString(svg, 'image/svg+xml')
-          const svgElement = svgDoc.documentElement
+          // 一意のIDを生成
+          const uniqueId = `mermaid-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`
+          const { svg } = await mermaid.render(uniqueId, code)
           
-          // 既存の内容をクリアしてSVG要素を追加
-          div.textContent = ''
-          div.appendChild(svgElement)
+          // 既存の内容をクリアしてSVG文字列を挿入（DOMPurifyで追加サニタイズ）
+          div.innerHTML = DOMPurify.sanitize(svg, {
+            ADD_TAGS: ['svg', 'g', 'path', 'text', 'tspan', 'rect', 'circle', 'line', 'polygon', 'polyline', 'ellipse', 'marker', 'defs', 'style', 'foreignObject'],
+            ADD_ATTR: ['viewBox', 'width', 'height', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'd', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'points', 'marker-end', 'marker-start', 'id', 'class', 'style', 'text-anchor', 'font-family', 'font-size', 'font-weight', 'dominant-baseline', 'alignment-baseline', 'xmlns']
+          })
           div.classList.add('mermaid-rendered')
         } catch (error) {
           console.error('Mermaid render error:', error)
           // エラーメッセージをテキストとして安全に表示
-          div.textContent = 'Error rendering Mermaid diagram'
+          div.textContent = `Error rendering Mermaid diagram: ${error instanceof Error ? error.message : 'Unknown error'}`
           div.style.color = 'red'
         }
       }
@@ -184,19 +186,7 @@ export function MarkdownEditor() {
       return
     }
     
-    const codeBlocks = previewRef.current.querySelectorAll('pre code:not(.mermaid-diagram)')
-    if (codeBlocks.length === 0) return
-    
-    codeBlocks.forEach((block) => {
-      try {
-        // 既存のハイライトクラスを削除してから再適用
-        const classes = Array.from(block.classList).filter(cls => !cls.startsWith('hljs'))
-        block.className = classes.join(' ')
-        hljs.highlightElement(block as HTMLElement)
-      } catch (error) {
-        console.error('Highlighting error:', error)
-      }
-    })
+    reapplyHighlighting()
   }, [processedHTML, viewMode, colorMode])
 
   // ファイル保存
@@ -222,6 +212,11 @@ export function MarkdownEditor() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       showToast('ファイルを保存しました', TOAST_DURATIONS.SHORT)
+      
+      // ハイライトを再適用
+      setTimeout(() => {
+        reapplyHighlighting()
+      }, 150)
     } catch (error) {
       console.error('Save error:', error)
       showToast('保存に失敗しました', TOAST_DURATIONS.ERROR)
@@ -252,12 +247,19 @@ export function MarkdownEditor() {
         }
         setMarkdown(content)
         showToast('ファイルを読み込みました', TOAST_DURATIONS.SHORT)
+        
+        // ハイライトを再適用（次の描画サイクルで）
+        setTimeout(() => {
+          reapplyHighlighting()
+        }, 150)
       }
       reader.onerror = () => {
         showToast('ファイルの読み込みに失敗しました', TOAST_DURATIONS.ERROR)
       }
       reader.readAsText(file, 'UTF-8')
     }
+    // input要素をリセット（同じファイルを再度選択できるように）
+    e.target.value = ''
   }
 
   // PDF出力
@@ -279,171 +281,120 @@ export function MarkdownEditor() {
       const originalWidth = previewElement.style.width
       const originalMaxWidth = previewElement.style.maxWidth
       
-      // PDF用に一時的にライトモードのスタイルを適用
+      // PDF用に一時的にライトモードのスタイルを適用（PDFは常にライトモード）
       const originalBgColor = previewElement.style.backgroundColor
       const originalColor = previewElement.style.color
       previewElement.setAttribute('data-pdf-export', 'true')
       
       // ライトモード用の一時的なスタイルを設定
-      if (colorMode === 'dark') {
-        previewElement.style.backgroundColor = '#ffffff'
-        previewElement.style.color = '#24292f'
+      previewElement.style.backgroundColor = '#ffffff'
+      previewElement.style.color = '#24292f'
+      
+      // コードブロックのスタイルを一時的に変更
+      const codeBlocks = previewElement.querySelectorAll('pre')
+      const inlineCodes = previewElement.querySelectorAll('code')
+      const originalStyles: Array<{element: HTMLElement, bgColor: string, color: string}> = []
+      
+      codeBlocks.forEach((pre) => {
+        const element = pre as HTMLElement
+        originalStyles.push({
+          element,
+          bgColor: element.style.backgroundColor,
+          color: element.style.color
+        })
+        element.style.backgroundColor = '#f6f8fa'
+        element.style.borderColor = '#d0d7de'
         
-        // コードブロックのスタイルを一時的に変更
-        const codeBlocks = previewElement.querySelectorAll('pre')
-        const inlineCodes = previewElement.querySelectorAll('code')
-        const originalStyles: Array<{element: HTMLElement, bgColor: string, color: string}> = []
-        
-        codeBlocks.forEach((pre) => {
-          const element = pre as HTMLElement
+        const code = pre.querySelector('code')
+        if (code) {
+          const codeEl = code as HTMLElement
+          originalStyles.push({
+            element: codeEl,
+            bgColor: codeEl.style.backgroundColor,
+            color: codeEl.style.color
+          })
+          codeEl.style.color = '#24292f'
+        }
+      })
+      
+      inlineCodes.forEach((code) => {
+        const element = code as HTMLElement
+        // <pre>内の<code>は既に処理済みなので、親が<pre>でない場合のみ処理
+        if (element.parentElement?.tagName !== 'PRE') {
           originalStyles.push({
             element,
             bgColor: element.style.backgroundColor,
             color: element.style.color
           })
-          element.style.backgroundColor = '#f6f8fa'
-          element.style.borderColor = '#d0d7de'
-          
-          const code = pre.querySelector('code')
-          if (code) {
-            const codeEl = code as HTMLElement
-            originalStyles.push({
-              element: codeEl,
-              bgColor: codeEl.style.backgroundColor,
-              color: codeEl.style.color
-            })
-            codeEl.style.color = '#24292f'
-          }
-        })
-        
-        inlineCodes.forEach((code) => {
-          const element = code as HTMLElement
-          // <pre>内の<code>は既に処理済みなので、親が<pre>でない場合のみ処理
-          if (element.parentElement?.tagName !== 'PRE') {
-            originalStyles.push({
-              element,
-              bgColor: element.style.backgroundColor,
-              color: element.style.color
-            })
-            element.style.backgroundColor = 'rgba(175, 184, 193, 0.2)'
-            element.style.color = '#24292f'
-          }
-        })
-        
-        // モバイルの場合、一時的に幅を広げてPDF生成
-        if (isMobile) {
-          previewElement.style.width = '800px'
-          previewElement.style.maxWidth = '800px'
+          element.style.backgroundColor = 'rgba(175, 184, 193, 0.2)'
+          element.style.color = '#24292f'
         }
-        
-        // プレビュー要素をキャンバスに変換
-        const canvas = await html2canvas(previewElement, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          windowWidth: isMobile ? 800 : undefined,
-          width: isMobile ? 800 : undefined
-        })
-        
-        // スタイルを元に戻す
-        previewElement.style.backgroundColor = originalBgColor
-        previewElement.style.color = originalColor
-        originalStyles.forEach(({element, bgColor, color}) => {
-          element.style.backgroundColor = bgColor
-          element.style.color = color
-        })
-        
-        if (isMobile) {
-          previewElement.style.width = originalWidth
-          previewElement.style.maxWidth = originalMaxWidth
-        }
-        previewElement.removeAttribute('data-pdf-export')
-        
-        const imgData = canvas.toDataURL('image/png')
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        })
-        
-        const pdfWidth = 210 // A4 width in mm
-        const pdfHeight = 297 // A4 height in mm
-        const margin = 10 // マージン
-        const contentWidth = pdfWidth - (margin * 2)
-        const imgWidth = contentWidth
-        const imgHeight = (canvas.height * contentWidth) / canvas.width
-        let heightLeft = imgHeight
-        let position = margin
-        
-        // 最初のページ
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-        heightLeft -= (pdfHeight - margin * 2)
-        
-        // 複数ページの場合
-        while (heightLeft > 0) {
-          position = -(imgHeight - heightLeft) + margin
-          pdf.addPage()
-          pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-          heightLeft -= (pdfHeight - margin * 2)
-        }
-        
-        pdf.save('document.pdf')
-        showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
-      } else {
-        // ライトモードの場合は通常通り
-        // モバイルの場合、一時的に幅を広げてPDF生成
-        if (isMobile) {
-          previewElement.style.width = '800px'
-          previewElement.style.maxWidth = '800px'
-        }
-        
-        // プレビュー要素をキャンバスに変換
-        const canvas = await html2canvas(previewElement, {
-          scale: 2,
-          useCORS: true,
-          logging: false,
-          windowWidth: isMobile ? 800 : undefined,
-          width: isMobile ? 800 : undefined
-        })
-        
-        // スタイルを元に戻す
-        if (isMobile) {
-          previewElement.style.width = originalWidth
-          previewElement.style.maxWidth = originalMaxWidth
-        }
-        previewElement.removeAttribute('data-pdf-export')
-        
-        const imgData = canvas.toDataURL('image/png')
-        const pdf = new jsPDF({
-          orientation: 'portrait',
-          unit: 'mm',
-          format: 'a4'
-        })
-        
-        const pdfWidth = 210 // A4 width in mm
-        const pdfHeight = 297 // A4 height in mm
-        const margin = 10 // マージン
-        const contentWidth = pdfWidth - (margin * 2)
-        const imgWidth = contentWidth
-        const imgHeight = (canvas.height * contentWidth) / canvas.width
-        let heightLeft = imgHeight
-        let position = margin
-        
-        // 最初のページ
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-        heightLeft -= (pdfHeight - margin * 2)
-        
-        // 複数ページの場合
-        while (heightLeft > 0) {
-          position = -(imgHeight - heightLeft) + margin
-          pdf.addPage()
-          pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-          heightLeft -= (pdfHeight - margin * 2)
-        }
-        
-        pdf.save('document.pdf')
-        showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
+      })
+      
+      // モバイルの場合、一時的に幅を広げてPDF生成
+      if (isMobile) {
+        previewElement.style.width = '800px'
+        previewElement.style.maxWidth = '800px'
       }
+      
+      // プレビュー要素をキャンバスに変換
+      const canvas = await html2canvas(previewElement, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        windowWidth: isMobile ? 800 : undefined,
+        width: isMobile ? 800 : undefined
+      })
+      
+      // スタイルを元に戻す
+      previewElement.style.backgroundColor = originalBgColor
+      previewElement.style.color = originalColor
+      originalStyles.forEach(({element, bgColor, color}) => {
+        element.style.backgroundColor = bgColor
+        element.style.color = color
+      })
+      
+      if (isMobile) {
+        previewElement.style.width = originalWidth
+        previewElement.style.maxWidth = originalMaxWidth
+      }
+      previewElement.removeAttribute('data-pdf-export')
+      
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      })
+      
+      const pdfWidth = 210 // A4 width in mm
+      const pdfHeight = 297 // A4 height in mm
+      const margin = 10 // マージン
+      const contentWidth = pdfWidth - (margin * 2)
+      const imgWidth = contentWidth
+      const imgHeight = (canvas.height * contentWidth) / canvas.width
+      let heightLeft = imgHeight
+      let position = margin
+      
+      // 最初のページ
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+      heightLeft -= (pdfHeight - margin * 2)
+      
+      // 複数ページの場合
+      while (heightLeft > 0) {
+        position = -(imgHeight - heightLeft) + margin
+        pdf.addPage()
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+        heightLeft -= (pdfHeight - margin * 2)
+      }
+      
+      pdf.save('document.pdf')
+      showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
+      
+      // ハイライトを再適用
+      setTimeout(() => {
+        reapplyHighlighting()
+      }, 150)
     } catch (error) {
       console.error('PDF export error:', error)
       showToast('PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
@@ -655,21 +606,101 @@ export function MarkdownEditor() {
               role="region"
               aria-label="Markdownプレビュー"
               css={{
-                '& *': { textAlign: 'left !important' },
-                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em', textAlign: 'left' },
-                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', borderBottom: `1px solid ${colorStyles.border.default}`, paddingBottom: '0.3em', textAlign: 'left' },
-                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
-                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em', textAlign: 'left' },
-                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em', textAlign: 'left' },
-                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em', textAlign: 'left' },
-                '& p': { marginTop: '1em', marginBottom: '1em', lineHeight: '1.6', textAlign: 'left' },
-                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'disc', textAlign: 'left' },
-                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'decimal', textAlign: 'left' },
-                '& li': { marginTop: '0.25em', marginBottom: '0.25em', display: 'list-item', lineHeight: '1.6', textAlign: 'left' },
-                '& ul ul': { marginTop: '0.25em', marginBottom: '0.25em', listStyleType: 'circle' },
-                '& ol ol': { marginTop: '0.25em', marginBottom: '0.25em', listStyleType: 'lower-alpha' },
-                '& ul li::marker': { color: colorStyles.text.primary },
-                '& ol li::marker': { color: colorStyles.text.primary },
+                // すべてのテキストを左揃えにする
+                textAlign: 'left',
+                '& > *': { textAlign: 'left' },
+                '& h1': { 
+                  fontSize: '2em', 
+                  fontWeight: 'bold', 
+                  marginTop: '0.67em', 
+                  marginBottom: '0.67em', 
+                  textAlign: 'left !important',
+                  color: colorStyles.text.primary 
+                },
+                '& h2': { 
+                  fontSize: '1.5em', 
+                  fontWeight: 'bold', 
+                  marginTop: '0.83em', 
+                  marginBottom: '0.83em', 
+                  borderBottom: `1px solid ${colorStyles.border.default}`, 
+                  paddingBottom: '0.3em', 
+                  textAlign: 'left !important',
+                  color: colorStyles.text.primary 
+                },
+                '& h3': { 
+                  fontSize: '1.17em', 
+                  fontWeight: 'bold', 
+                  marginTop: '1em', 
+                  marginBottom: '1em', 
+                  textAlign: 'left !important',
+                  color: colorStyles.text.primary 
+                },
+                '& h4': { 
+                  fontSize: '1em', 
+                  fontWeight: 'bold', 
+                  marginTop: '1.33em', 
+                  marginBottom: '1.33em', 
+                  textAlign: 'left !important',
+                  color: colorStyles.text.primary 
+                },
+                '& h5': { 
+                  fontSize: '0.83em', 
+                  fontWeight: 'bold', 
+                  marginTop: '1.67em', 
+                  marginBottom: '1.67em', 
+                  textAlign: 'left !important',
+                  color: colorStyles.text.primary 
+                },
+                '& h6': { 
+                  fontSize: '0.67em', 
+                  fontWeight: 'bold', 
+                  marginTop: '2.33em', 
+                  marginBottom: '2.33em', 
+                  textAlign: 'left !important',
+                  color: colorStyles.text.primary 
+                },
+                '& p': { 
+                  marginTop: '1em', 
+                  marginBottom: '1em', 
+                  lineHeight: '1.6', 
+                  textAlign: 'left !important',
+                  color: colorStyles.text.primary 
+                },
+                '& ul, & ol': { 
+                  marginTop: '1em', 
+                  marginBottom: '1em', 
+                  paddingLeft: '2em', 
+                  textAlign: 'left !important' 
+                },
+                '& ul': { 
+                  listStyleType: 'disc',
+                  listStylePosition: 'outside'
+                },
+                '& ol': { 
+                  listStyleType: 'decimal',
+                  listStylePosition: 'outside'
+                },
+                '& li': { 
+                  marginTop: '0.25em', 
+                  marginBottom: '0.25em', 
+                  display: 'list-item', 
+                  lineHeight: '1.6', 
+                  textAlign: 'left !important',
+                  color: colorStyles.text.primary 
+                },
+                '& ul ul': { 
+                  marginTop: '0.25em', 
+                  marginBottom: '0.25em', 
+                  listStyleType: 'circle' 
+                },
+                '& ol ol': { 
+                  marginTop: '0.25em', 
+                  marginBottom: '0.25em', 
+                  listStyleType: 'lower-alpha' 
+                },
+                '& ul li::marker, & ol li::marker': { 
+                  color: colorStyles.text.primary 
+                },
                 '& code': { 
                   backgroundColor: colorMode === 'dark' ? 'rgba(110, 118, 129, 0.4)' : 'rgba(175, 184, 193, 0.2)',
                   color: colorMode === 'dark' ? '#e6edf3' : '#24292f',
@@ -686,12 +717,13 @@ export function MarkdownEditor() {
                   marginTop: '1em',
                   marginBottom: '1em',
                   border: `1px solid ${colorMode === 'dark' ? '#30363d' : '#d0d7de'}`,
-                  textAlign: 'left'
+                  textAlign: 'left !important'
                 },
                 '& pre code': {
                   backgroundColor: 'transparent',
                   padding: 0,
-                  color: colorMode === 'dark' ? '#e6edf3' : '#24292f'
+                  color: 'inherit',
+                  fontSize: '0.85em'
                 },
                 '& input[type="checkbox"]': {
                   width: '1em',
@@ -700,9 +732,11 @@ export function MarkdownEditor() {
                   verticalAlign: 'middle',
                   accentColor: colorMode === 'dark' ? '#58a6ff' : '#0969da',
                   cursor: 'pointer',
-                  backgroundColor: colorMode === 'dark' ? '#161b22' : '#ffffff',
-                  border: `1px solid ${colorMode === 'dark' ? '#6e7681' : '#d0d7de'}`,
-                  borderRadius: '3px'
+                  backgroundColor: colorMode === 'dark' ? '#0d1117' : '#ffffff',
+                  border: `2px solid ${colorMode === 'dark' ? '#6e7681' : '#d0d7de'}`,
+                  borderRadius: '3px',
+                  appearance: 'auto',
+                  WebkitAppearance: 'auto'
                 },
                 '& li:has(> input[type="checkbox"])': {
                   listStyleType: 'none',
@@ -714,17 +748,20 @@ export function MarkdownEditor() {
                   marginLeft: 0,
                   marginTop: '1em',
                   marginBottom: '1em',
-                  color: colorStyles.text.secondary
+                  color: colorStyles.text.secondary,
+                  textAlign: 'left !important'
                 },
                 '& table': {
                   borderCollapse: 'collapse',
                   width: '100%',
                   marginTop: '1em',
-                  marginBottom: '1em'
+                  marginBottom: '1em',
+                  textAlign: 'left !important'
                 },
                 '& th, & td': {
                   border: `1px solid ${colorStyles.border.default}`,
-                  padding: '0.5em'
+                  padding: '0.5em',
+                  textAlign: 'left !important'
                 },
                 '& th': {
                   backgroundColor: colorStyles.bg.secondary,
@@ -735,11 +772,55 @@ export function MarkdownEditor() {
                   marginBottom: '1em',
                   display: 'flex',
                   justifyContent: 'center',
-                  textAlign: 'center'
+                  textAlign: 'center !important'
                 },
                 '& .mermaid-rendered svg': {
                   maxWidth: '100%',
                   height: 'auto'
+                },
+                // highlight.jsのダークモードカラーを上書き
+                '& .hljs': {
+                  color: colorMode === 'dark' ? '#e6edf3' : '#24292f',
+                  background: 'transparent'
+                },
+                '& .hljs-comment': {
+                  color: colorMode === 'dark' ? '#8b949e' : '#6a737d'
+                },
+                '& .hljs-keyword, & .hljs-selector-tag, & .hljs-meta .hljs-keyword, & .hljs-template-tag, & .hljs-template-variable, & .hljs-type, & .hljs-variable.language_': {
+                  color: colorMode === 'dark' ? '#ff7b72' : '#d73a49'
+                },
+                '& .hljs-variable, & .hljs-literal, & .hljs-number': {
+                  color: colorMode === 'dark' ? '#79c0ff' : '#005cc5'
+                },
+                '& .hljs-string, & .hljs-doctag': {
+                  color: colorMode === 'dark' ? '#a5d6ff' : '#032f62'
+                },
+                '& .hljs-title, & .hljs-section, & .hljs-selector-id': {
+                  color: colorMode === 'dark' ? '#d2a8ff' : '#6f42c1'
+                },
+                '& .hljs-attr, & .hljs-attribute': {
+                  color: colorMode === 'dark' ? '#79c0ff' : '#005cc5'
+                },
+                '& .hljs-built_in, & .hljs-class .hljs-title': {
+                  color: colorMode === 'dark' ? '#ffa657' : '#e36209'
+                },
+                '& .hljs-name, & .hljs-property, & .hljs-quote, & .hljs-selector-class, & .hljs-selector-pseudo': {
+                  color: colorMode === 'dark' ? '#7ee787' : '#22863a'
+                },
+                '& .hljs-tag': {
+                  color: colorMode === 'dark' ? '#7ee787' : '#22863a'
+                },
+                '& .hljs-subst': {
+                  color: colorMode === 'dark' ? '#e6edf3' : '#24292f'
+                },
+                '& .hljs-formula': {
+                  color: colorMode === 'dark' ? '#e6edf3' : '#24292f'
+                },
+                '& .hljs-emphasis': {
+                  fontStyle: 'italic'
+                },
+                '& .hljs-strong': {
+                  fontWeight: 'bold'
                 }
               }}
               dangerouslySetInnerHTML={{ __html: processedHTML }}
