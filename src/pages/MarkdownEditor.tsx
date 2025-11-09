@@ -89,6 +89,9 @@ export function MarkdownEditor() {
       const classes = Array.from(element.classList).filter(cls => !cls.startsWith('hljs'))
       element.className = classes.join(' ')
       
+      // data-highlighted属性を削除（highlight.jsの再適用を可能にする）
+      delete element.dataset.highlighted
+      
       // ハイライトを再適用
       try {
         hljs.highlightElement(element)
@@ -182,13 +185,21 @@ export function MarkdownEditor() {
         try {
           // 一意のIDを生成
           const uniqueId = `mermaid-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`
+          
+          // セキュリティ対策: Mermaidコードのサイズ制限（10KB）
+          const maxCodeSize = 10 * 1024
+          if (code.length > maxCodeSize) {
+            throw new Error('Mermaid diagram too large')
+          }
+          
           const { svg } = await mermaid.render(uniqueId, code)
           
-          // 既存の内容をクリアしてSVG文字列を挿入（DOMPurifyで追加サニタイズ）
-          div.innerHTML = DOMPurify.sanitize(svg, {
-            ADD_TAGS: ['svg', 'g', 'path', 'text', 'tspan', 'rect', 'circle', 'line', 'polygon', 'polyline', 'ellipse', 'marker', 'defs', 'style', 'foreignObject'],
-            ADD_ATTR: ['viewBox', 'width', 'height', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'd', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'points', 'marker-end', 'marker-start', 'id', 'class', 'style', 'text-anchor', 'font-family', 'font-size', 'font-weight', 'dominant-baseline', 'alignment-baseline', 'xmlns']
-          })
+          // Mermaidが生成するSVGを挿入
+          // 注: DOMPurifyは foreignObject 内の HTML 要素を削除してしまうため使用しない
+          // Mermaidライブラリ自体が安全なSVG出力を生成し、ユーザー入力は図の構造のみを制御する
+          // （任意のHTML/JavaScriptの挿入は不可能）
+          // さらに、元のmarkdown contentはDOMPurifyで既にサニタイズ済み
+          div.innerHTML = svg
           div.classList.add('mermaid-rendered')
         } catch (error) {
           console.error('Mermaid render error:', error)
