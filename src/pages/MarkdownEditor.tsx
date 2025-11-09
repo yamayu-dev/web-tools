@@ -38,29 +38,39 @@ export function MarkdownEditor() {
   // カラーモードに応じてhighlight.jsテーマを動的にロード
   useEffect(() => {
     const loadHighlightTheme = async () => {
-      // 既存のスタイルを削除
-      const existingStyles = document.querySelectorAll('style[data-vite-dev-id*="highlight.js"]')
-      existingStyles.forEach(style => {
-        if (style.textContent) {
-          // テーマに応じてスタイルの有効/無効を切り替え
-          const isGithubDark = style.getAttribute('data-vite-dev-id')?.includes('github-dark')
-          const isGithubLight = style.getAttribute('data-vite-dev-id')?.includes('github.css') && !isGithubDark
-          
-          if (colorMode === 'dark' && isGithubLight) {
-            style.disabled = true
-          } else if (colorMode === 'light' && isGithubDark) {
-            style.disabled = true
-          } else if ((colorMode === 'dark' && isGithubDark) || (colorMode === 'light' && isGithubLight)) {
+      // カスタムクラス名でスタイル要素を識別
+      const existingLightStyle = document.getElementById('hljs-light-theme')
+      const existingDarkStyle = document.getElementById('hljs-dark-theme')
+      
+      // 既存のスタイルの有効/無効を切り替え
+      if (existingLightStyle) {
+        existingLightStyle.disabled = colorMode === 'dark'
+      }
+      if (existingDarkStyle) {
+        existingDarkStyle.disabled = colorMode === 'light'
+      }
+      
+      // テーマが未読み込みの場合のみ動的インポート
+      if (colorMode === 'dark' && !existingDarkStyle) {
+        await import('highlight.js/styles/github-dark-dimmed.css')
+        // インポート後にスタイルを特定してIDを付与
+        const styles = document.querySelectorAll('style')
+        styles.forEach(style => {
+          if (style.textContent?.includes('.hljs') && !style.id) {
+            style.id = 'hljs-dark-theme'
             style.disabled = false
           }
-        }
-      })
-      
-      // 動的インポートでテーマを読み込む
-      if (colorMode === 'dark') {
-        await import('highlight.js/styles/github-dark-dimmed.css')
-      } else {
+        })
+      } else if (colorMode === 'light' && !existingLightStyle) {
         await import('highlight.js/styles/github.css')
+        // インポート後にスタイルを特定してIDを付与
+        const styles = document.querySelectorAll('style')
+        styles.forEach(style => {
+          if (style.textContent?.includes('.hljs') && !style.id) {
+            style.id = 'hljs-light-theme'
+            style.disabled = false
+          }
+        })
       }
       
       // コードブロックを再ハイライト
@@ -531,42 +541,43 @@ export function MarkdownEditor() {
               role="region"
               aria-label="Markdownプレビュー"
               css={{
-                '& *': { textAlign: 'left' },
-                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em' },
-                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', borderBottom: `1px solid ${colorStyles.border.default}`, paddingBottom: '0.3em' },
-                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em' },
-                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em' },
-                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em' },
-                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em' },
-                '& p': { marginTop: '1em', marginBottom: '1em', lineHeight: '1.6' },
-                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'disc' },
-                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'decimal' },
-                '& li': { marginTop: '0.25em', marginBottom: '0.25em', display: 'list-item', lineHeight: '1.6' },
-                '& ul ul': { marginTop: '0.25em', marginBottom: '0.25em' },
-                '& ol ol': { marginTop: '0.25em', marginBottom: '0.25em' },
+                '& *': { textAlign: 'left !important' },
+                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em', textAlign: 'left' },
+                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', borderBottom: `1px solid ${colorStyles.border.default}`, paddingBottom: '0.3em', textAlign: 'left' },
+                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
+                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em', textAlign: 'left' },
+                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em', textAlign: 'left' },
+                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em', textAlign: 'left' },
+                '& p': { marginTop: '1em', marginBottom: '1em', lineHeight: '1.6', textAlign: 'left' },
+                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'disc', textAlign: 'left' },
+                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'decimal', textAlign: 'left' },
+                '& li': { marginTop: '0.25em', marginBottom: '0.25em', display: 'list-item', lineHeight: '1.6', textAlign: 'left' },
+                '& ul ul': { marginTop: '0.25em', marginBottom: '0.25em', listStyleType: 'circle' },
+                '& ol ol': { marginTop: '0.25em', marginBottom: '0.25em', listStyleType: 'lower-alpha' },
                 '& ul li::marker': { color: colorStyles.text.primary },
                 '& ol li::marker': { color: colorStyles.text.primary },
                 '& code': { 
                   backgroundColor: colorMode === 'dark' ? 'rgba(110, 118, 129, 0.4)' : 'rgba(175, 184, 193, 0.2)',
-                  color: colorMode === 'dark' ? '#f0f6fc' : '#24292f',
+                  color: colorMode === 'dark' ? '#e6edf3' : '#24292f',
                   padding: '0.2em 0.4em', 
                   borderRadius: '3px',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
                   fontSize: '0.9em'
                 },
                 '& pre': { 
-                  backgroundColor: colorMode === 'dark' ? '#161b22' : '#f6f8fa',
+                  backgroundColor: colorMode === 'dark' ? '#0d1117' : '#f6f8fa',
                   padding: '1em', 
                   borderRadius: '6px',
                   overflowX: 'auto',
                   marginTop: '1em',
                   marginBottom: '1em',
-                  border: `1px solid ${colorMode === 'dark' ? '#30363d' : '#d0d7de'}`
+                  border: `1px solid ${colorMode === 'dark' ? '#30363d' : '#d0d7de'}`,
+                  textAlign: 'left'
                 },
                 '& pre code': {
                   backgroundColor: 'transparent',
                   padding: 0,
-                  color: colorMode === 'dark' ? '#f0f6fc' : '#24292f'
+                  color: colorMode === 'dark' ? '#e6edf3' : '#24292f'
                 },
                 '& input[type="checkbox"]': {
                   width: '1em',
@@ -574,7 +585,10 @@ export function MarkdownEditor() {
                   marginRight: '0.5em',
                   verticalAlign: 'middle',
                   accentColor: colorMode === 'dark' ? '#58a6ff' : '#0969da',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  backgroundColor: colorMode === 'dark' ? '#161b22' : '#ffffff',
+                  border: `1px solid ${colorMode === 'dark' ? '#6e7681' : '#d0d7de'}`,
+                  borderRadius: '3px'
                 },
                 '& li:has(> input[type="checkbox"])': {
                   listStyleType: 'none',
@@ -606,7 +620,8 @@ export function MarkdownEditor() {
                   marginTop: '1em',
                   marginBottom: '1em',
                   display: 'flex',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  textAlign: 'center'
                 },
                 '& .mermaid-rendered svg': {
                   maxWidth: '100%',
