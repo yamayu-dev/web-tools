@@ -28,8 +28,8 @@ import { TOAST_DURATIONS } from '../constants/uiConstants'
 export function MarkdownEditor() {
   const [markdown, setMarkdown] = useState<string>('')
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split')
-  const [renderTrigger, setRenderTrigger] = useState<number>(0) // Force re-render trigger
   const previewRef = useRef<HTMLDivElement>(null)
+  const lastProcessedHTMLRef = useRef<string>('') // Track last processed HTML
   const fileInputRef = useRef<HTMLInputElement>(null)
   const colorStyles = useColorStyles()
   const { colorMode } = useColorMode()
@@ -147,6 +147,14 @@ export function MarkdownEditor() {
     )
   }, [renderedHTML])
 
+  // Update preview innerHTML only when processedHTML actually changes
+  useEffect(() => {
+    if (previewRef.current && processedHTML !== lastProcessedHTMLRef.current) {
+      previewRef.current.innerHTML = processedHTML
+      lastProcessedHTMLRef.current = processedHTML
+    }
+  }, [processedHTML])
+
   // Mermaidダイアグラムを処理
   useEffect(() => {
     if (!previewRef.current || (viewMode !== 'preview' && viewMode !== 'split')) {
@@ -194,7 +202,7 @@ export function MarkdownEditor() {
     // 少し遅延してから実行（DOM更新を待つ）
     const timer = setTimeout(renderMermaid, 100)
     return () => clearTimeout(timer)
-  }, [processedHTML, viewMode, colorMode, renderTrigger])
+  }, [processedHTML, viewMode, colorMode])
 
   // コードブロックにシンタックスハイライトを適用
   useEffect(() => {
@@ -233,9 +241,6 @@ export function MarkdownEditor() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       showToast('ファイルを保存しました', TOAST_DURATIONS.SHORT)
-      
-      // Trigger re-render to ensure Mermaid and highlighting are preserved
-      setRenderTrigger(prev => prev + 1)
     } catch (error) {
       console.error('Save error:', error)
       showToast('保存に失敗しました', TOAST_DURATIONS.ERROR)
@@ -266,9 +271,6 @@ export function MarkdownEditor() {
         }
         setMarkdown(content)
         showToast('ファイルを読み込みました', TOAST_DURATIONS.SHORT)
-        
-        // Trigger re-render to ensure Mermaid and highlighting are applied
-        setRenderTrigger(prev => prev + 1)
       }
       reader.onerror = () => {
         showToast('ファイルの読み込みに失敗しました', TOAST_DURATIONS.ERROR)
@@ -407,9 +409,6 @@ export function MarkdownEditor() {
       
       pdf.save('document.pdf')
       showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
-      
-      // Trigger re-render to ensure Mermaid and highlighting are restored
-      setRenderTrigger(prev => prev + 1)
     } catch (error) {
       console.error('PDF export error:', error)
       showToast('PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
@@ -838,7 +837,6 @@ export function MarkdownEditor() {
                   fontWeight: 'bold'
                 }
               }}
-              dangerouslySetInnerHTML={{ __html: processedHTML }}
             />
           </Box>
         )}
