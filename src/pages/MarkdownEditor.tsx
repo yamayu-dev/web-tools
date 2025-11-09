@@ -29,6 +29,7 @@ export function MarkdownEditor() {
   const [markdown, setMarkdown] = useState<string>('')
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split')
   const previewRef = useRef<HTMLDivElement>(null)
+  const lastProcessedHTMLRef = useRef<string>('') // Track last processed HTML
   const fileInputRef = useRef<HTMLInputElement>(null)
   const colorStyles = useColorStyles()
   const { colorMode } = useColorMode()
@@ -83,10 +84,17 @@ export function MarkdownEditor() {
     
     const codeBlocks = previewRef.current.querySelectorAll('pre code:not(.mermaid-diagram)')
     codeBlocks.forEach((block) => {
+      const element = block as HTMLElement
       // クラスをリセットしてから再適用
-      const classes = Array.from(block.classList).filter(cls => !cls.startsWith('hljs'))
-      block.className = classes.join(' ')
-      hljs.highlightElement(block as HTMLElement)
+      const classes = Array.from(element.classList).filter(cls => !cls.startsWith('hljs'))
+      element.className = classes.join(' ')
+      
+      // ハイライトを再適用
+      try {
+        hljs.highlightElement(element)
+      } catch (error) {
+        console.warn('Highlight error:', error)
+      }
     })
   }
   
@@ -103,6 +111,14 @@ export function MarkdownEditor() {
       theme: colorMode === 'dark' ? 'dark' : 'default',
       securityLevel: 'loose',
     })
+    
+    // カラーモード変更時に、既存のMermaid図を再レンダリング可能にする
+    if (previewRef.current) {
+      const mermaidDivs = previewRef.current.querySelectorAll('.mermaid-diagram.mermaid-rendered')
+      mermaidDivs.forEach((div) => {
+        div.classList.remove('mermaid-rendered')
+      })
+    }
   }, [colorMode])
 
   // Markdownをレンダリング
@@ -122,6 +138,22 @@ export function MarkdownEditor() {
       return '<p>Error rendering markdown</p>'
     }
   }, [markdown])
+
+  // Mermaidコードブロックを特別な要素に変換
+  const processedHTML = useMemo(() => {
+    return renderedHTML.replace(
+      /<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g,
+      (_, code) => `<div class="mermaid-diagram">${code}</div>`
+    )
+  }, [renderedHTML])
+
+  // Update preview innerHTML only when processedHTML actually changes
+  useEffect(() => {
+    if (previewRef.current && processedHTML !== lastProcessedHTMLRef.current) {
+      previewRef.current.innerHTML = processedHTML
+      lastProcessedHTMLRef.current = processedHTML
+    }
+  }, [processedHTML])
 
   // Mermaidダイアグラムを処理
   useEffect(() => {
@@ -170,15 +202,7 @@ export function MarkdownEditor() {
     // 少し遅延してから実行（DOM更新を待つ）
     const timer = setTimeout(renderMermaid, 100)
     return () => clearTimeout(timer)
-  }, [renderedHTML, viewMode, colorMode])
-
-  // Mermaidコードブロックを特別な要素に変換
-  const processedHTML = useMemo(() => {
-    return renderedHTML.replace(
-      /<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g,
-      (_, code) => `<div class="mermaid-diagram">${code}</div>`
-    )
-  }, [renderedHTML])
+  }, [processedHTML, viewMode, colorMode])
 
   // コードブロックにシンタックスハイライトを適用
   useEffect(() => {
@@ -186,7 +210,12 @@ export function MarkdownEditor() {
       return
     }
     
-    reapplyHighlighting()
+    // DOM更新を待ってからハイライトを適用
+    const timer = setTimeout(() => {
+      reapplyHighlighting()
+    }, 50)
+    
+    return () => clearTimeout(timer)
   }, [processedHTML, viewMode, colorMode])
 
   // ファイル保存
@@ -212,11 +241,6 @@ export function MarkdownEditor() {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       showToast('ファイルを保存しました', TOAST_DURATIONS.SHORT)
-      
-      // ハイライトを再適用
-      setTimeout(() => {
-        reapplyHighlighting()
-      }, 150)
     } catch (error) {
       console.error('Save error:', error)
       showToast('保存に失敗しました', TOAST_DURATIONS.ERROR)
@@ -247,11 +271,6 @@ export function MarkdownEditor() {
         }
         setMarkdown(content)
         showToast('ファイルを読み込みました', TOAST_DURATIONS.SHORT)
-        
-        // ハイライトを再適用（次の描画サイクルで）
-        setTimeout(() => {
-          reapplyHighlighting()
-        }, 150)
       }
       reader.onerror = () => {
         showToast('ファイルの読み込みに失敗しました', TOAST_DURATIONS.ERROR)
@@ -390,11 +409,6 @@ export function MarkdownEditor() {
       
       pdf.save('document.pdf')
       showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
-      
-      // ハイライトを再適用
-      setTimeout(() => {
-        reapplyHighlighting()
-      }, 150)
     } catch (error) {
       console.error('PDF export error:', error)
       showToast('PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
@@ -823,7 +837,6 @@ export function MarkdownEditor() {
                   fontWeight: 'bold'
                 }
               }}
-              dangerouslySetInnerHTML={{ __html: processedHTML }}
             />
           </Box>
         )}
