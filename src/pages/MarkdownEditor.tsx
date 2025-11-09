@@ -213,12 +213,30 @@ export function MarkdownEditor() {
     try {
       showToast('PDF生成中...', TOAST_DURATIONS.SHORT)
       
+      const previewElement = previewRef.current
+      const originalWidth = previewElement.style.width
+      const originalMaxWidth = previewElement.style.maxWidth
+      
+      // モバイルの場合、一時的に幅を広げてPDF生成
+      if (isMobile) {
+        previewElement.style.width = '800px'
+        previewElement.style.maxWidth = '800px'
+      }
+      
       // プレビュー要素をキャンバスに変換
-      const canvas = await html2canvas(previewRef.current, {
+      const canvas = await html2canvas(previewElement, {
         scale: 2,
         useCORS: true,
-        logging: false
+        logging: false,
+        windowWidth: isMobile ? 800 : undefined,
+        width: isMobile ? 800 : undefined
       })
+      
+      // スタイルを元に戻す
+      if (isMobile) {
+        previewElement.style.width = originalWidth
+        previewElement.style.maxWidth = originalMaxWidth
+      }
       
       const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF({
@@ -227,20 +245,25 @@ export function MarkdownEditor() {
         format: 'a4'
       })
       
-      const imgWidth = 210 // A4 width in mm
-      const pageHeight = 297 // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      const pdfWidth = 210 // A4 width in mm
+      const pdfHeight = 297 // A4 height in mm
+      const margin = 10 // マージン
+      const contentWidth = pdfWidth - (margin * 2)
+      const imgWidth = contentWidth
+      const imgHeight = (canvas.height * contentWidth) / canvas.width
       let heightLeft = imgHeight
-      let position = 0
+      let position = margin
       
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pageHeight
+      // 最初のページ
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+      heightLeft -= (pdfHeight - margin * 2)
       
+      // 複数ページの場合
       while (heightLeft > 0) {
-        position = heightLeft - imgHeight
+        position = -(imgHeight - heightLeft) + margin
         pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pageHeight
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+        heightLeft -= (pdfHeight - margin * 2)
       }
       
       pdf.save('document.pdf')
