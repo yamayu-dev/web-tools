@@ -102,8 +102,8 @@ export function MarkdownEditor() {
       }) as string
       // DOMPurifyでHTMLをサニタイズ（XSS対策）
       return DOMPurify.sanitize(rawHTML, {
-        ADD_TAGS: ['iframe'], // Mermaidで使用される可能性があるタグ
-        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] // iframe属性
+        ADD_TAGS: ['iframe', 'input'], // Mermaidとチェックボックス用
+        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'type', 'checked', 'disabled'] // チェックボックス属性を追加
       })
     } catch (error) {
       console.error('Markdown parse error:', error)
@@ -159,7 +159,10 @@ export function MarkdownEditor() {
   // ファイル保存
   const handleSave = () => {
     try {
-      const blob = new Blob([markdown], { type: 'text/markdown' })
+      // UTF-8 BOMを追加してiPhoneでも正しく読めるようにする
+      const BOM = '\uFEFF'
+      const content = BOM + markdown
+      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -431,38 +434,56 @@ export function MarkdownEditor() {
               border="1px solid"
               rounded="md"
               overflowY="auto"
+              textAlign="left"
               css={{
-                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em', textAlign: 'left' },
-                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', textAlign: 'left' },
-                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
-                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em', textAlign: 'left' },
-                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em', textAlign: 'left' },
-                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em', textAlign: 'left' },
-                '& p': { marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
-                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', textAlign: 'left', listStyleType: 'disc', listStylePosition: 'outside' },
-                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', textAlign: 'left', listStyleType: 'decimal', listStylePosition: 'outside' },
-                '& li': { marginTop: '0.5em', marginBottom: '0.5em', textAlign: 'left', display: 'list-item' },
+                '& *': { textAlign: 'left' },
+                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em' },
+                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', borderBottom: `1px solid ${colorStyles.border.default}`, paddingBottom: '0.3em' },
+                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em' },
+                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em' },
+                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em' },
+                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em' },
+                '& p': { marginTop: '1em', marginBottom: '1em', lineHeight: '1.6' },
+                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'disc' },
+                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'decimal' },
+                '& li': { marginTop: '0.25em', marginBottom: '0.25em', display: 'list-item', lineHeight: '1.6' },
+                '& ul ul': { marginTop: '0.25em', marginBottom: '0.25em' },
+                '& ol ol': { marginTop: '0.25em', marginBottom: '0.25em' },
+                '& ul li::marker': { color: colorStyles.text.primary },
+                '& ol li::marker': { color: colorStyles.text.primary },
                 '& code': { 
-                  backgroundColor: colorMode === 'dark' ? 'rgba(110, 118, 129, 0.4)' : colorStyles.bg.secondary,
-                  color: colorMode === 'dark' ? '#e6edf3' : 'inherit',
+                  backgroundColor: colorMode === 'dark' ? 'rgba(110, 118, 129, 0.4)' : 'rgba(175, 184, 193, 0.2)',
+                  color: colorMode === 'dark' ? '#f0f6fc' : '#24292f',
                   padding: '0.2em 0.4em', 
                   borderRadius: '3px',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
                   fontSize: '0.9em'
                 },
                 '& pre': { 
-                  backgroundColor: colorMode === 'dark' ? '#0d1117' : colorStyles.bg.secondary,
+                  backgroundColor: colorMode === 'dark' ? '#161b22' : '#f6f8fa',
                   padding: '1em', 
                   borderRadius: '6px',
                   overflowX: 'auto',
                   marginTop: '1em',
                   marginBottom: '1em',
-                  textAlign: 'left'
+                  border: `1px solid ${colorMode === 'dark' ? '#30363d' : '#d0d7de'}`
                 },
                 '& pre code': {
                   backgroundColor: 'transparent',
                   padding: 0,
-                  color: colorMode === 'dark' ? '#e6edf3' : 'inherit'
+                  color: colorMode === 'dark' ? '#f0f6fc' : '#24292f'
+                },
+                '& input[type="checkbox"]': {
+                  width: '1em',
+                  height: '1em',
+                  marginRight: '0.5em',
+                  verticalAlign: 'middle',
+                  accentColor: colorMode === 'dark' ? '#58a6ff' : '#0969da',
+                  cursor: 'pointer'
+                },
+                '& li:has(> input[type="checkbox"])': {
+                  listStyleType: 'none',
+                  marginLeft: '-1.5em'
                 },
                 '& blockquote': {
                   borderLeft: `4px solid ${colorStyles.border.default}`,
@@ -470,8 +491,7 @@ export function MarkdownEditor() {
                   marginLeft: 0,
                   marginTop: '1em',
                   marginBottom: '1em',
-                  color: colorStyles.text.secondary,
-                  textAlign: 'left'
+                  color: colorStyles.text.secondary
                 },
                 '& table': {
                   borderCollapse: 'collapse',
@@ -481,8 +501,7 @@ export function MarkdownEditor() {
                 },
                 '& th, & td': {
                   border: `1px solid ${colorStyles.border.default}`,
-                  padding: '0.5em',
-                  textAlign: 'left'
+                  padding: '0.5em'
                 },
                 '& th': {
                   backgroundColor: colorStyles.bg.secondary,
