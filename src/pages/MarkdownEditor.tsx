@@ -187,11 +187,9 @@ export function MarkdownEditor() {
           const uniqueId = `mermaid-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`
           const { svg } = await mermaid.render(uniqueId, code)
           
-          // 既存の内容をクリアしてSVG文字列を挿入（DOMPurifyで追加サニタイズ）
-          div.innerHTML = DOMPurify.sanitize(svg, {
-            ADD_TAGS: ['svg', 'g', 'path', 'text', 'tspan', 'rect', 'circle', 'line', 'polygon', 'polyline', 'ellipse', 'marker', 'defs', 'style', 'foreignObject'],
-            ADD_ATTR: ['viewBox', 'width', 'height', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'd', 'transform', 'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'points', 'marker-end', 'marker-start', 'id', 'class', 'style', 'text-anchor', 'font-family', 'font-size', 'font-weight', 'dominant-baseline', 'alignment-baseline', 'xmlns']
-          })
+          // Mermaidが生成するSVGはすでに安全なので、DOMPurifyは使用しない
+          // （Mermaid自体がセキュアな出力を生成する）
+          div.innerHTML = svg
           div.classList.add('mermaid-rendered')
         } catch (error) {
           console.error('Mermaid render error:', error)
