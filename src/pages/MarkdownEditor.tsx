@@ -119,7 +119,11 @@ export function MarkdownEditor() {
         if (mermaidDivs) {
           for (let i = 0; i < mermaidDivs.length; i++) {
             const div = mermaidDivs[i] as HTMLElement
-            const code = div.textContent || ''
+            // 元のコードを保存または取得
+            let code = div.getAttribute('data-mermaid-code') || div.textContent || ''
+            if (!div.getAttribute('data-mermaid-code')) {
+              div.setAttribute('data-mermaid-code', code)
+            }
             try {
               const { svg } = await mermaid.render(`mermaid-${Date.now()}-${i}`, code)
               div.innerHTML = svg
@@ -136,7 +140,7 @@ export function MarkdownEditor() {
       const timer = setTimeout(renderMermaid, 100)
       return () => clearTimeout(timer)
     }
-  }, [renderedHTML, viewMode])
+  }, [renderedHTML, viewMode, colorMode])
 
   // Mermaidコードブロックを特別な要素に変換
   const processedHTML = useMemo(() => {
@@ -151,10 +155,13 @@ export function MarkdownEditor() {
     if (previewRef.current && (viewMode === 'preview' || viewMode === 'split')) {
       const codeBlocks = previewRef.current.querySelectorAll('pre code:not(.mermaid-diagram)')
       codeBlocks.forEach((block) => {
+        // 既存のハイライトクラスを削除してから再適用
+        const classes = Array.from(block.classList).filter(cls => !cls.startsWith('hljs'))
+        block.className = classes.join(' ')
         hljs.highlightElement(block as HTMLElement)
       })
     }
-  }, [processedHTML, viewMode])
+  }, [processedHTML, viewMode, colorMode])
 
   // ファイル保存
   const handleSave = () => {
