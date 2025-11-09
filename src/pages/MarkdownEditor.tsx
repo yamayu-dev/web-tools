@@ -15,6 +15,8 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
+import 'highlight.js/styles/github-dark-dimmed.css'
 import { Download, Upload, FileText } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
@@ -37,30 +39,38 @@ export function MarkdownEditor() {
   
   // カラーモードに応じてhighlight.jsテーマを動的にロード
   useEffect(() => {
-    const loadHighlightTheme = async () => {
-      // 既存のスタイルを削除
-      const existingStyles = document.querySelectorAll('style[data-vite-dev-id*="highlight.js"]')
-      existingStyles.forEach(style => {
-        if (style.textContent) {
-          // テーマに応じてスタイルの有効/無効を切り替え
-          const isGithubDark = style.getAttribute('data-vite-dev-id')?.includes('github-dark')
-          const isGithubLight = style.getAttribute('data-vite-dev-id')?.includes('github.css') && !isGithubDark
-          
-          if (colorMode === 'dark' && isGithubLight) {
-            style.disabled = true
-          } else if (colorMode === 'light' && isGithubDark) {
-            style.disabled = true
-          } else if ((colorMode === 'dark' && isGithubDark) || (colorMode === 'light' && isGithubLight)) {
-            style.disabled = false
+    const loadHighlightTheme = () => {
+      // カスタムクラス名でスタイル要素を識別
+      const styles = document.querySelectorAll('style')
+      let lightStyle: HTMLStyleElement | null = null
+      let darkStyle: HTMLStyleElement | null = null
+      
+      // highlight.jsのスタイルを特定
+      styles.forEach(style => {
+        if (style.textContent?.includes('.hljs')) {
+          // github.css（ライトテーマ）
+          if (style.textContent.includes('.hljs') && !style.id) {
+            if (style.textContent.includes('color:#24292e') || style.textContent.includes('color:#24292f')) {
+              style.id = 'hljs-light-theme'
+              lightStyle = style
+            } else if (style.textContent.includes('color:#e6edf3') || style.textContent.includes('color:#c9d1d9')) {
+              style.id = 'hljs-dark-theme'
+              darkStyle = style
+            }
+          } else if (style.id === 'hljs-light-theme') {
+            lightStyle = style
+          } else if (style.id === 'hljs-dark-theme') {
+            darkStyle = style
           }
         }
       })
       
-      // 動的インポートでテーマを読み込む
-      if (colorMode === 'dark') {
-        await import('highlight.js/styles/github-dark-dimmed.css')
-      } else {
-        await import('highlight.js/styles/github.css')
+      // テーマに応じて有効/無効を切り替え
+      if (lightStyle) {
+        lightStyle.disabled = colorMode === 'dark'
+      }
+      if (darkStyle) {
+        darkStyle.disabled = colorMode === 'light'
       }
       
       // コードブロックを再ハイライト
@@ -269,57 +279,171 @@ export function MarkdownEditor() {
       const originalWidth = previewElement.style.width
       const originalMaxWidth = previewElement.style.maxWidth
       
-      // モバイルの場合、一時的に幅を広げてPDF生成
-      if (isMobile) {
-        previewElement.style.width = '800px'
-        previewElement.style.maxWidth = '800px'
-      }
+      // PDF用に一時的にライトモードのスタイルを適用
+      const originalBgColor = previewElement.style.backgroundColor
+      const originalColor = previewElement.style.color
+      previewElement.setAttribute('data-pdf-export', 'true')
       
-      // プレビュー要素をキャンバスに変換
-      const canvas = await html2canvas(previewElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: isMobile ? 800 : undefined,
-        width: isMobile ? 800 : undefined
-      })
-      
-      // スタイルを元に戻す
-      if (isMobile) {
-        previewElement.style.width = originalWidth
-        previewElement.style.maxWidth = originalMaxWidth
-      }
-      
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      })
-      
-      const pdfWidth = 210 // A4 width in mm
-      const pdfHeight = 297 // A4 height in mm
-      const margin = 10 // マージン
-      const contentWidth = pdfWidth - (margin * 2)
-      const imgWidth = contentWidth
-      const imgHeight = (canvas.height * contentWidth) / canvas.width
-      let heightLeft = imgHeight
-      let position = margin
-      
-      // 最初のページ
-      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-      heightLeft -= (pdfHeight - margin * 2)
-      
-      // 複数ページの場合
-      while (heightLeft > 0) {
-        position = -(imgHeight - heightLeft) + margin
-        pdf.addPage()
+      // ライトモード用の一時的なスタイルを設定
+      if (colorMode === 'dark') {
+        previewElement.style.backgroundColor = '#ffffff'
+        previewElement.style.color = '#24292f'
+        
+        // コードブロックのスタイルを一時的に変更
+        const codeBlocks = previewElement.querySelectorAll('pre')
+        const inlineCodes = previewElement.querySelectorAll('code')
+        const originalStyles: Array<{element: HTMLElement, bgColor: string, color: string}> = []
+        
+        codeBlocks.forEach((pre) => {
+          const element = pre as HTMLElement
+          originalStyles.push({
+            element,
+            bgColor: element.style.backgroundColor,
+            color: element.style.color
+          })
+          element.style.backgroundColor = '#f6f8fa'
+          element.style.borderColor = '#d0d7de'
+          
+          const code = pre.querySelector('code')
+          if (code) {
+            const codeEl = code as HTMLElement
+            originalStyles.push({
+              element: codeEl,
+              bgColor: codeEl.style.backgroundColor,
+              color: codeEl.style.color
+            })
+            codeEl.style.color = '#24292f'
+          }
+        })
+        
+        inlineCodes.forEach((code) => {
+          const element = code as HTMLElement
+          // <pre>内の<code>は既に処理済みなので、親が<pre>でない場合のみ処理
+          if (element.parentElement?.tagName !== 'PRE') {
+            originalStyles.push({
+              element,
+              bgColor: element.style.backgroundColor,
+              color: element.style.color
+            })
+            element.style.backgroundColor = 'rgba(175, 184, 193, 0.2)'
+            element.style.color = '#24292f'
+          }
+        })
+        
+        // モバイルの場合、一時的に幅を広げてPDF生成
+        if (isMobile) {
+          previewElement.style.width = '800px'
+          previewElement.style.maxWidth = '800px'
+        }
+        
+        // プレビュー要素をキャンバスに変換
+        const canvas = await html2canvas(previewElement, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          windowWidth: isMobile ? 800 : undefined,
+          width: isMobile ? 800 : undefined
+        })
+        
+        // スタイルを元に戻す
+        previewElement.style.backgroundColor = originalBgColor
+        previewElement.style.color = originalColor
+        originalStyles.forEach(({element, bgColor, color}) => {
+          element.style.backgroundColor = bgColor
+          element.style.color = color
+        })
+        
+        if (isMobile) {
+          previewElement.style.width = originalWidth
+          previewElement.style.maxWidth = originalMaxWidth
+        }
+        previewElement.removeAttribute('data-pdf-export')
+        
+        const imgData = canvas.toDataURL('image/png')
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        })
+        
+        const pdfWidth = 210 // A4 width in mm
+        const pdfHeight = 297 // A4 height in mm
+        const margin = 10 // マージン
+        const contentWidth = pdfWidth - (margin * 2)
+        const imgWidth = contentWidth
+        const imgHeight = (canvas.height * contentWidth) / canvas.width
+        let heightLeft = imgHeight
+        let position = margin
+        
+        // 最初のページ
         pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
         heightLeft -= (pdfHeight - margin * 2)
+        
+        // 複数ページの場合
+        while (heightLeft > 0) {
+          position = -(imgHeight - heightLeft) + margin
+          pdf.addPage()
+          pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+          heightLeft -= (pdfHeight - margin * 2)
+        }
+        
+        pdf.save('document.pdf')
+        showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
+      } else {
+        // ライトモードの場合は通常通り
+        // モバイルの場合、一時的に幅を広げてPDF生成
+        if (isMobile) {
+          previewElement.style.width = '800px'
+          previewElement.style.maxWidth = '800px'
+        }
+        
+        // プレビュー要素をキャンバスに変換
+        const canvas = await html2canvas(previewElement, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          windowWidth: isMobile ? 800 : undefined,
+          width: isMobile ? 800 : undefined
+        })
+        
+        // スタイルを元に戻す
+        if (isMobile) {
+          previewElement.style.width = originalWidth
+          previewElement.style.maxWidth = originalMaxWidth
+        }
+        previewElement.removeAttribute('data-pdf-export')
+        
+        const imgData = canvas.toDataURL('image/png')
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        })
+        
+        const pdfWidth = 210 // A4 width in mm
+        const pdfHeight = 297 // A4 height in mm
+        const margin = 10 // マージン
+        const contentWidth = pdfWidth - (margin * 2)
+        const imgWidth = contentWidth
+        const imgHeight = (canvas.height * contentWidth) / canvas.width
+        let heightLeft = imgHeight
+        let position = margin
+        
+        // 最初のページ
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+        heightLeft -= (pdfHeight - margin * 2)
+        
+        // 複数ページの場合
+        while (heightLeft > 0) {
+          position = -(imgHeight - heightLeft) + margin
+          pdf.addPage()
+          pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+          heightLeft -= (pdfHeight - margin * 2)
+        }
+        
+        pdf.save('document.pdf')
+        showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
       }
-      
-      pdf.save('document.pdf')
-      showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
     } catch (error) {
       console.error('PDF export error:', error)
       showToast('PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
@@ -531,42 +655,43 @@ export function MarkdownEditor() {
               role="region"
               aria-label="Markdownプレビュー"
               css={{
-                '& *': { textAlign: 'left' },
-                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em' },
-                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', borderBottom: `1px solid ${colorStyles.border.default}`, paddingBottom: '0.3em' },
-                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em' },
-                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em' },
-                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em' },
-                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em' },
-                '& p': { marginTop: '1em', marginBottom: '1em', lineHeight: '1.6' },
-                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'disc' },
-                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'decimal' },
-                '& li': { marginTop: '0.25em', marginBottom: '0.25em', display: 'list-item', lineHeight: '1.6' },
-                '& ul ul': { marginTop: '0.25em', marginBottom: '0.25em' },
-                '& ol ol': { marginTop: '0.25em', marginBottom: '0.25em' },
+                '& *': { textAlign: 'left !important' },
+                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em', textAlign: 'left' },
+                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', borderBottom: `1px solid ${colorStyles.border.default}`, paddingBottom: '0.3em', textAlign: 'left' },
+                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
+                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em', textAlign: 'left' },
+                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em', textAlign: 'left' },
+                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em', textAlign: 'left' },
+                '& p': { marginTop: '1em', marginBottom: '1em', lineHeight: '1.6', textAlign: 'left' },
+                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'disc', textAlign: 'left' },
+                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'decimal', textAlign: 'left' },
+                '& li': { marginTop: '0.25em', marginBottom: '0.25em', display: 'list-item', lineHeight: '1.6', textAlign: 'left' },
+                '& ul ul': { marginTop: '0.25em', marginBottom: '0.25em', listStyleType: 'circle' },
+                '& ol ol': { marginTop: '0.25em', marginBottom: '0.25em', listStyleType: 'lower-alpha' },
                 '& ul li::marker': { color: colorStyles.text.primary },
                 '& ol li::marker': { color: colorStyles.text.primary },
                 '& code': { 
                   backgroundColor: colorMode === 'dark' ? 'rgba(110, 118, 129, 0.4)' : 'rgba(175, 184, 193, 0.2)',
-                  color: colorMode === 'dark' ? '#f0f6fc' : '#24292f',
+                  color: colorMode === 'dark' ? '#e6edf3' : '#24292f',
                   padding: '0.2em 0.4em', 
                   borderRadius: '3px',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
                   fontSize: '0.9em'
                 },
                 '& pre': { 
-                  backgroundColor: colorMode === 'dark' ? '#161b22' : '#f6f8fa',
+                  backgroundColor: colorMode === 'dark' ? '#0d1117' : '#f6f8fa',
                   padding: '1em', 
                   borderRadius: '6px',
                   overflowX: 'auto',
                   marginTop: '1em',
                   marginBottom: '1em',
-                  border: `1px solid ${colorMode === 'dark' ? '#30363d' : '#d0d7de'}`
+                  border: `1px solid ${colorMode === 'dark' ? '#30363d' : '#d0d7de'}`,
+                  textAlign: 'left'
                 },
                 '& pre code': {
                   backgroundColor: 'transparent',
                   padding: 0,
-                  color: colorMode === 'dark' ? '#f0f6fc' : '#24292f'
+                  color: colorMode === 'dark' ? '#e6edf3' : '#24292f'
                 },
                 '& input[type="checkbox"]': {
                   width: '1em',
@@ -574,7 +699,10 @@ export function MarkdownEditor() {
                   marginRight: '0.5em',
                   verticalAlign: 'middle',
                   accentColor: colorMode === 'dark' ? '#58a6ff' : '#0969da',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  backgroundColor: colorMode === 'dark' ? '#161b22' : '#ffffff',
+                  border: `1px solid ${colorMode === 'dark' ? '#6e7681' : '#d0d7de'}`,
+                  borderRadius: '3px'
                 },
                 '& li:has(> input[type="checkbox"])': {
                   listStyleType: 'none',
@@ -606,7 +734,8 @@ export function MarkdownEditor() {
                   marginTop: '1em',
                   marginBottom: '1em',
                   display: 'flex',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  textAlign: 'center'
                 },
                 '& .mermaid-rendered svg': {
                   maxWidth: '100%',
