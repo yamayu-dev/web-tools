@@ -15,18 +15,13 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
-import 'highlight.js/styles/github.css'
 import { Download, Upload, FileText } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
+import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
 
-// Mermaidの初期化
-mermaid.initialize({
-  startOnLoad: false,
-  theme: 'default',
-  securityLevel: 'loose',
-})
+// Mermaid will be initialized dynamically based on color mode
 
 export function MarkdownEditor() {
   const [markdown, setMarkdown] = useState<string>('')
@@ -34,16 +29,69 @@ export function MarkdownEditor() {
   const previewRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const colorStyles = useColorStyles()
+  const { colorMode } = useColorMode()
   const { message: toastMessage, showToast } = useToast()
   
   // レスポンシブ対応: PCではsplit、モバイルではedit
   const isMobile = useBreakpointValue({ base: true, md: false })
+  
+  // カラーモードに応じてhighlight.jsテーマを動的にロード
+  useEffect(() => {
+    const loadHighlightTheme = async () => {
+      // 既存のスタイルを削除
+      const existingStyles = document.querySelectorAll('style[data-vite-dev-id*="highlight.js"]')
+      existingStyles.forEach(style => {
+        if (style.textContent) {
+          // テーマに応じてスタイルの有効/無効を切り替え
+          const isGithubDark = style.getAttribute('data-vite-dev-id')?.includes('github-dark')
+          const isGithubLight = style.getAttribute('data-vite-dev-id')?.includes('github.css') && !isGithubDark
+          
+          if (colorMode === 'dark' && isGithubLight) {
+            style.disabled = true
+          } else if (colorMode === 'light' && isGithubDark) {
+            style.disabled = true
+          } else if ((colorMode === 'dark' && isGithubDark) || (colorMode === 'light' && isGithubLight)) {
+            style.disabled = false
+          }
+        }
+      })
+      
+      // 動的インポートでテーマを読み込む
+      if (colorMode === 'dark') {
+        await import('highlight.js/styles/github-dark-dimmed.css')
+      } else {
+        await import('highlight.js/styles/github.css')
+      }
+      
+      // コードブロックを再ハイライト
+      if (previewRef.current) {
+        const codeBlocks = previewRef.current.querySelectorAll('pre code:not(.mermaid-diagram)')
+        codeBlocks.forEach((block) => {
+          // クラスをリセットしてから再適用
+          const classes = Array.from(block.classList).filter(cls => !cls.startsWith('hljs'))
+          block.className = classes.join(' ')
+          hljs.highlightElement(block as HTMLElement)
+        })
+      }
+    }
+    
+    loadHighlightTheme()
+  }, [colorMode])
   
   useEffect(() => {
     if (isMobile && viewMode === 'split') {
       setViewMode('edit')
     }
   }, [isMobile, viewMode])
+
+  // Mermaidをカラーモードに応じて初期化
+  useEffect(() => {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: colorMode === 'dark' ? 'dark' : 'default',
+      securityLevel: 'loose',
+    })
+  }, [colorMode])
 
   // Markdownをレンダリング
   const renderedHTML = useMemo(() => {
@@ -391,8 +439,9 @@ export function MarkdownEditor() {
                 '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em', textAlign: 'left' },
                 '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em', textAlign: 'left' },
                 '& p': { marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
-                '& ul, & ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', textAlign: 'left' },
-                '& li': { marginTop: '0.5em', marginBottom: '0.5em', textAlign: 'left' },
+                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', textAlign: 'left', listStyleType: 'disc', listStylePosition: 'outside' },
+                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', textAlign: 'left', listStyleType: 'decimal', listStylePosition: 'outside' },
+                '& li': { marginTop: '0.5em', marginBottom: '0.5em', textAlign: 'left', display: 'list-item' },
                 '& code': { 
                   backgroundColor: colorStyles.bg.secondary, 
                   padding: '0.2em 0.4em', 
