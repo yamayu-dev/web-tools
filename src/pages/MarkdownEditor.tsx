@@ -15,6 +15,8 @@ import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
+import 'highlight.js/styles/github-dark-dimmed.css'
 import { Download, Upload, FileText } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
@@ -37,40 +39,38 @@ export function MarkdownEditor() {
   
   // カラーモードに応じてhighlight.jsテーマを動的にロード
   useEffect(() => {
-    const loadHighlightTheme = async () => {
+    const loadHighlightTheme = () => {
       // カスタムクラス名でスタイル要素を識別
-      const existingLightStyle = document.getElementById('hljs-light-theme')
-      const existingDarkStyle = document.getElementById('hljs-dark-theme')
+      const styles = document.querySelectorAll('style')
+      let lightStyle: HTMLStyleElement | null = null
+      let darkStyle: HTMLStyleElement | null = null
       
-      // 既存のスタイルの有効/無効を切り替え
-      if (existingLightStyle) {
-        existingLightStyle.disabled = colorMode === 'dark'
-      }
-      if (existingDarkStyle) {
-        existingDarkStyle.disabled = colorMode === 'light'
-      }
+      // highlight.jsのスタイルを特定
+      styles.forEach(style => {
+        if (style.textContent?.includes('.hljs')) {
+          // github.css（ライトテーマ）
+          if (style.textContent.includes('.hljs') && !style.id) {
+            if (style.textContent.includes('color:#24292e') || style.textContent.includes('color:#24292f')) {
+              style.id = 'hljs-light-theme'
+              lightStyle = style
+            } else if (style.textContent.includes('color:#e6edf3') || style.textContent.includes('color:#c9d1d9')) {
+              style.id = 'hljs-dark-theme'
+              darkStyle = style
+            }
+          } else if (style.id === 'hljs-light-theme') {
+            lightStyle = style
+          } else if (style.id === 'hljs-dark-theme') {
+            darkStyle = style
+          }
+        }
+      })
       
-      // テーマが未読み込みの場合のみ動的インポート
-      if (colorMode === 'dark' && !existingDarkStyle) {
-        await import('highlight.js/styles/github-dark-dimmed.css')
-        // インポート後にスタイルを特定してIDを付与
-        const styles = document.querySelectorAll('style')
-        styles.forEach(style => {
-          if (style.textContent?.includes('.hljs') && !style.id) {
-            style.id = 'hljs-dark-theme'
-            style.disabled = false
-          }
-        })
-      } else if (colorMode === 'light' && !existingLightStyle) {
-        await import('highlight.js/styles/github.css')
-        // インポート後にスタイルを特定してIDを付与
-        const styles = document.querySelectorAll('style')
-        styles.forEach(style => {
-          if (style.textContent?.includes('.hljs') && !style.id) {
-            style.id = 'hljs-light-theme'
-            style.disabled = false
-          }
-        })
+      // テーマに応じて有効/無効を切り替え
+      if (lightStyle) {
+        lightStyle.disabled = colorMode === 'dark'
+      }
+      if (darkStyle) {
+        darkStyle.disabled = colorMode === 'light'
       }
       
       // コードブロックを再ハイライト
