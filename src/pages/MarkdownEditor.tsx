@@ -89,6 +89,9 @@ export function MarkdownEditor() {
       const classes = Array.from(element.classList).filter(cls => !cls.startsWith('hljs'))
       element.className = classes.join(' ')
       
+      // data-highlighted属性を削除（highlight.jsの再適用を可能にする）
+      delete element.dataset.highlighted
+      
       // ハイライトを再適用
       try {
         hljs.highlightElement(element)
