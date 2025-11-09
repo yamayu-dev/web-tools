@@ -102,8 +102,8 @@ export function MarkdownEditor() {
       }) as string
       // DOMPurifyでHTMLをサニタイズ（XSS対策）
       return DOMPurify.sanitize(rawHTML, {
-        ADD_TAGS: ['iframe'], // Mermaidで使用される可能性があるタグ
-        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling'] // iframe属性
+        ADD_TAGS: ['iframe', 'input'], // Mermaidとチェックボックス用
+        ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'type', 'checked', 'disabled'] // チェックボックス属性を追加
       })
     } catch (error) {
       console.error('Markdown parse error:', error)
@@ -113,30 +113,52 @@ export function MarkdownEditor() {
 
   // Mermaidダイアグラムを処理
   useEffect(() => {
-    if (previewRef.current && (viewMode === 'preview' || viewMode === 'split')) {
-      const renderMermaid = async () => {
-        const mermaidDivs = previewRef.current?.querySelectorAll('.mermaid-diagram')
-        if (mermaidDivs) {
-          for (let i = 0; i < mermaidDivs.length; i++) {
-            const div = mermaidDivs[i] as HTMLElement
-            const code = div.textContent || ''
-            try {
-              const { svg } = await mermaid.render(`mermaid-${Date.now()}-${i}`, code)
-              div.innerHTML = svg
-              div.classList.add('mermaid-rendered')
-            } catch (error) {
-              console.error('Mermaid render error:', error)
-              div.innerHTML = '<p style="color: red;">Error rendering Mermaid diagram</p>'
-            }
-          }
+    if (!previewRef.current || (viewMode !== 'preview' && viewMode !== 'split')) {
+      return
+    }
+
+    const renderMermaid = async () => {
+      const mermaidDivs = previewRef.current?.querySelectorAll('.mermaid-diagram')
+      if (!mermaidDivs || mermaidDivs.length === 0) return
+      
+      for (let i = 0; i < mermaidDivs.length; i++) {
+        const div = mermaidDivs[i] as HTMLElement
+        // 元のコードを保存または取得
+        const savedCode = div.getAttribute('data-mermaid-code')
+        const code = savedCode || div.textContent || ''
+        
+        if (!savedCode && code) {
+          div.setAttribute('data-mermaid-code', code)
+        }
+        
+        if (!code.trim()) {
+          continue
+        }
+        
+        try {
+          const { svg } = await mermaid.render(`mermaid-${Date.now()}-${i}`, code)
+          // DOMPurserを使用してSVGを安全に挿入
+          const parser = new DOMParser()
+          const svgDoc = parser.parseFromString(svg, 'image/svg+xml')
+          const svgElement = svgDoc.documentElement
+          
+          // 既存の内容をクリアしてSVG要素を追加
+          div.textContent = ''
+          div.appendChild(svgElement)
+          div.classList.add('mermaid-rendered')
+        } catch (error) {
+          console.error('Mermaid render error:', error)
+          // エラーメッセージをテキストとして安全に表示
+          div.textContent = 'Error rendering Mermaid diagram'
+          div.style.color = 'red'
         }
       }
-      
-      // 少し遅延してから実行（DOM更新を待つ）
-      const timer = setTimeout(renderMermaid, 100)
-      return () => clearTimeout(timer)
     }
-  }, [renderedHTML, viewMode])
+    
+    // 少し遅延してから実行（DOM更新を待つ）
+    const timer = setTimeout(renderMermaid, 100)
+    return () => clearTimeout(timer)
+  }, [renderedHTML, viewMode, colorMode])
 
   // Mermaidコードブロックを特別な要素に変換
   const processedHTML = useMemo(() => {
@@ -148,22 +170,43 @@ export function MarkdownEditor() {
 
   // コードブロックにシンタックスハイライトを適用
   useEffect(() => {
-    if (previewRef.current && (viewMode === 'preview' || viewMode === 'split')) {
-      const codeBlocks = previewRef.current.querySelectorAll('pre code:not(.mermaid-diagram)')
-      codeBlocks.forEach((block) => {
-        hljs.highlightElement(block as HTMLElement)
-      })
+    if (!previewRef.current || (viewMode !== 'preview' && viewMode !== 'split')) {
+      return
     }
-  }, [processedHTML, viewMode])
+    
+    const codeBlocks = previewRef.current.querySelectorAll('pre code:not(.mermaid-diagram)')
+    if (codeBlocks.length === 0) return
+    
+    codeBlocks.forEach((block) => {
+      try {
+        // 既存のハイライトクラスを削除してから再適用
+        const classes = Array.from(block.classList).filter(cls => !cls.startsWith('hljs'))
+        block.className = classes.join(' ')
+        hljs.highlightElement(block as HTMLElement)
+      } catch (error) {
+        console.error('Highlighting error:', error)
+      }
+    })
+  }, [processedHTML, viewMode, colorMode])
 
   // ファイル保存
   const handleSave = () => {
+    if (!markdown.trim()) {
+      showToast('保存する内容がありません', TOAST_DURATIONS.ERROR)
+      return
+    }
+    
     try {
-      const blob = new Blob([markdown], { type: 'text/markdown' })
+      // UTF-8 BOMを追加してiPhoneでも正しく読めるようにする
+      const BOM = '\uFEFF'
+      const content = BOM + markdown
+      const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'document.md'
+      // 日付を含むファイル名を生成
+      const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      a.download = `document_${date}.md`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -183,32 +226,69 @@ export function MarkdownEditor() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      // ファイルサイズチェック (10MB制限)
+      const maxSize = 10 * 1024 * 1024
+      if (file.size > maxSize) {
+        showToast('ファイルサイズが大きすぎます（10MB以下にしてください）', TOAST_DURATIONS.ERROR)
+        return
+      }
+      
       const reader = new FileReader()
       reader.onload = (event) => {
-        const content = event.target?.result as string
+        let content = event.target?.result as string
+        // UTF-8 BOMを削除
+        if (content.charCodeAt(0) === 0xFEFF) {
+          content = content.substring(1)
+        }
         setMarkdown(content)
         showToast('ファイルを読み込みました', TOAST_DURATIONS.SHORT)
       }
       reader.onerror = () => {
-        showToast('読み込みに失敗しました', TOAST_DURATIONS.ERROR)
+        showToast('ファイルの読み込みに失敗しました', TOAST_DURATIONS.ERROR)
       }
-      reader.readAsText(file)
+      reader.readAsText(file, 'UTF-8')
     }
   }
 
   // PDF出力
   const handleExportPDF = async () => {
-    if (!previewRef.current) return
+    if (!previewRef.current) {
+      showToast('プレビューが表示されていません', TOAST_DURATIONS.ERROR)
+      return
+    }
+    
+    if (!markdown.trim()) {
+      showToast('出力する内容がありません', TOAST_DURATIONS.ERROR)
+      return
+    }
     
     try {
       showToast('PDF生成中...', TOAST_DURATIONS.SHORT)
       
+      const previewElement = previewRef.current
+      const originalWidth = previewElement.style.width
+      const originalMaxWidth = previewElement.style.maxWidth
+      
+      // モバイルの場合、一時的に幅を広げてPDF生成
+      if (isMobile) {
+        previewElement.style.width = '800px'
+        previewElement.style.maxWidth = '800px'
+      }
+      
       // プレビュー要素をキャンバスに変換
-      const canvas = await html2canvas(previewRef.current, {
+      const canvas = await html2canvas(previewElement, {
         scale: 2,
         useCORS: true,
-        logging: false
+        logging: false,
+        windowWidth: isMobile ? 800 : undefined,
+        width: isMobile ? 800 : undefined
       })
+      
+      // スタイルを元に戻す
+      if (isMobile) {
+        previewElement.style.width = originalWidth
+        previewElement.style.maxWidth = originalMaxWidth
+      }
       
       const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF({
@@ -217,20 +297,25 @@ export function MarkdownEditor() {
         format: 'a4'
       })
       
-      const imgWidth = 210 // A4 width in mm
-      const pageHeight = 297 // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
+      const pdfWidth = 210 // A4 width in mm
+      const pdfHeight = 297 // A4 height in mm
+      const margin = 10 // マージン
+      const contentWidth = pdfWidth - (margin * 2)
+      const imgWidth = contentWidth
+      const imgHeight = (canvas.height * contentWidth) / canvas.width
       let heightLeft = imgHeight
-      let position = 0
+      let position = margin
       
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pageHeight
+      // 最初のページ
+      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+      heightLeft -= (pdfHeight - margin * 2)
       
+      // 複数ページの場合
       while (heightLeft > 0) {
-        position = heightLeft - imgHeight
+        position = -(imgHeight - heightLeft) + margin
         pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pageHeight
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+        heightLeft -= (pdfHeight - margin * 2)
       }
       
       pdf.save('document.pdf')
@@ -301,6 +386,8 @@ export function MarkdownEditor() {
                 colorScheme={viewMode === 'edit' ? 'blue' : 'gray'}
                 bg={viewMode === 'edit' ? colorStyles.accent.blue.button : colorStyles.bg.primary}
                 color={viewMode === 'edit' ? 'white' : colorStyles.text.primary}
+                aria-label="入力モードに切り替え"
+                aria-pressed={viewMode === 'edit'}
                 _hover={{
                   bg: viewMode === 'edit' ? colorStyles.accent.blue.buttonHover : colorStyles.bg.secondary
                 }}>
@@ -312,6 +399,8 @@ export function MarkdownEditor() {
                 colorScheme={viewMode === 'preview' ? 'blue' : 'gray'}
                 bg={viewMode === 'preview' ? colorStyles.accent.blue.button : colorStyles.bg.primary}
                 color={viewMode === 'preview' ? 'white' : colorStyles.text.primary}
+                aria-label="プレビューモードに切り替え"
+                aria-pressed={viewMode === 'preview'}
                 _hover={{
                   bg: viewMode === 'preview' ? colorStyles.accent.blue.buttonHover : colorStyles.bg.secondary
                 }}>
@@ -324,6 +413,8 @@ export function MarkdownEditor() {
                   colorScheme={viewMode === 'split' ? 'blue' : 'gray'}
                   bg={viewMode === 'split' ? colorStyles.accent.blue.button : colorStyles.bg.primary}
                   color={viewMode === 'split' ? 'white' : colorStyles.text.primary}
+                  aria-label="同時表示モードに切り替え"
+                  aria-pressed={viewMode === 'split'}
                   _hover={{
                     bg: viewMode === 'split' ? colorStyles.accent.blue.buttonHover : colorStyles.bg.secondary
                   }}>
@@ -341,6 +432,7 @@ export function MarkdownEditor() {
               accept=".md,.markdown,.txt"
               style={{ display: 'none' }}
               onChange={handleFileChange}
+              aria-label="ファイル選択"
             />
             <Button 
               onClick={handleLoad}
@@ -350,6 +442,7 @@ export function MarkdownEditor() {
               color={colorStyles.text.primary}
               borderColor={colorStyles.border.default}
               border="1px solid"
+              aria-label="Markdownファイルを読み込む"
               _hover={{
                 bg: colorStyles.bg.secondary
               }}>
@@ -363,6 +456,7 @@ export function MarkdownEditor() {
               color={colorStyles.text.primary}
               borderColor={colorStyles.border.default}
               border="1px solid"
+              aria-label="Markdownファイルを保存"
               _hover={{
                 bg: colorStyles.bg.secondary
               }}>
@@ -375,6 +469,7 @@ export function MarkdownEditor() {
               colorScheme="blue"
               bg={colorStyles.accent.blue.button}
               color="white"
+              aria-label="PDFとして出力"
               _hover={{
                 bg: colorStyles.accent.blue.buttonHover
               }}>
@@ -406,6 +501,7 @@ export function MarkdownEditor() {
               bg={colorStyles.bg.primary}
               color={colorStyles.text.primary}
               borderColor={colorStyles.border.input}
+              aria-label="Markdown入力エリア"
               _focus={{
                 borderColor: colorStyles.accent.blue.focus,
                 boxShadow: `0 0 0 1px ${colorStyles.accent.blue.focus}`
@@ -431,38 +527,58 @@ export function MarkdownEditor() {
               border="1px solid"
               rounded="md"
               overflowY="auto"
+              textAlign="left"
+              role="region"
+              aria-label="Markdownプレビュー"
               css={{
-                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em', textAlign: 'left' },
-                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', textAlign: 'left' },
-                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
-                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em', textAlign: 'left' },
-                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em', textAlign: 'left' },
-                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em', textAlign: 'left' },
-                '& p': { marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
-                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', textAlign: 'left', listStyleType: 'disc', listStylePosition: 'outside' },
-                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', textAlign: 'left', listStyleType: 'decimal', listStylePosition: 'outside' },
-                '& li': { marginTop: '0.5em', marginBottom: '0.5em', textAlign: 'left', display: 'list-item' },
+                '& *': { textAlign: 'left' },
+                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em' },
+                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', borderBottom: `1px solid ${colorStyles.border.default}`, paddingBottom: '0.3em' },
+                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em' },
+                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em' },
+                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em' },
+                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em' },
+                '& p': { marginTop: '1em', marginBottom: '1em', lineHeight: '1.6' },
+                '& ul': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'disc' },
+                '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', listStyleType: 'decimal' },
+                '& li': { marginTop: '0.25em', marginBottom: '0.25em', display: 'list-item', lineHeight: '1.6' },
+                '& ul ul': { marginTop: '0.25em', marginBottom: '0.25em' },
+                '& ol ol': { marginTop: '0.25em', marginBottom: '0.25em' },
+                '& ul li::marker': { color: colorStyles.text.primary },
+                '& ol li::marker': { color: colorStyles.text.primary },
                 '& code': { 
-                  backgroundColor: colorMode === 'dark' ? 'rgba(110, 118, 129, 0.4)' : colorStyles.bg.secondary,
-                  color: colorMode === 'dark' ? '#e6edf3' : 'inherit',
+                  backgroundColor: colorMode === 'dark' ? 'rgba(110, 118, 129, 0.4)' : 'rgba(175, 184, 193, 0.2)',
+                  color: colorMode === 'dark' ? '#f0f6fc' : '#24292f',
                   padding: '0.2em 0.4em', 
                   borderRadius: '3px',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
                   fontSize: '0.9em'
                 },
                 '& pre': { 
-                  backgroundColor: colorMode === 'dark' ? '#0d1117' : colorStyles.bg.secondary,
+                  backgroundColor: colorMode === 'dark' ? '#161b22' : '#f6f8fa',
                   padding: '1em', 
                   borderRadius: '6px',
                   overflowX: 'auto',
                   marginTop: '1em',
                   marginBottom: '1em',
-                  textAlign: 'left'
+                  border: `1px solid ${colorMode === 'dark' ? '#30363d' : '#d0d7de'}`
                 },
                 '& pre code': {
                   backgroundColor: 'transparent',
                   padding: 0,
-                  color: colorMode === 'dark' ? '#e6edf3' : 'inherit'
+                  color: colorMode === 'dark' ? '#f0f6fc' : '#24292f'
+                },
+                '& input[type="checkbox"]': {
+                  width: '1em',
+                  height: '1em',
+                  marginRight: '0.5em',
+                  verticalAlign: 'middle',
+                  accentColor: colorMode === 'dark' ? '#58a6ff' : '#0969da',
+                  cursor: 'pointer'
+                },
+                '& li:has(> input[type="checkbox"])': {
+                  listStyleType: 'none',
+                  marginLeft: '-1.5em'
                 },
                 '& blockquote': {
                   borderLeft: `4px solid ${colorStyles.border.default}`,
@@ -470,8 +586,7 @@ export function MarkdownEditor() {
                   marginLeft: 0,
                   marginTop: '1em',
                   marginBottom: '1em',
-                  color: colorStyles.text.secondary,
-                  textAlign: 'left'
+                  color: colorStyles.text.secondary
                 },
                 '& table': {
                   borderCollapse: 'collapse',
@@ -481,8 +596,7 @@ export function MarkdownEditor() {
                 },
                 '& th, & td': {
                   border: `1px solid ${colorStyles.border.default}`,
-                  padding: '0.5em',
-                  textAlign: 'left'
+                  padding: '0.5em'
                 },
                 '& th': {
                   backgroundColor: colorStyles.bg.secondary,
