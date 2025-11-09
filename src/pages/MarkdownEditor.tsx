@@ -443,14 +443,15 @@ export function MarkdownEditor() {
                 '& ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', textAlign: 'left', listStyleType: 'decimal', listStylePosition: 'outside' },
                 '& li': { marginTop: '0.5em', marginBottom: '0.5em', textAlign: 'left', display: 'list-item' },
                 '& code': { 
-                  backgroundColor: colorStyles.bg.secondary, 
+                  backgroundColor: colorMode === 'dark' ? 'rgba(110, 118, 129, 0.4)' : colorStyles.bg.secondary,
+                  color: colorMode === 'dark' ? '#e6edf3' : 'inherit',
                   padding: '0.2em 0.4em', 
                   borderRadius: '3px',
                   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
                   fontSize: '0.9em'
                 },
                 '& pre': { 
-                  backgroundColor: colorStyles.bg.secondary, 
+                  backgroundColor: colorMode === 'dark' ? '#0d1117' : colorStyles.bg.secondary,
                   padding: '1em', 
                   borderRadius: '6px',
                   overflowX: 'auto',
@@ -460,7 +461,8 @@ export function MarkdownEditor() {
                 },
                 '& pre code': {
                   backgroundColor: 'transparent',
-                  padding: 0
+                  padding: 0,
+                  color: colorMode === 'dark' ? '#e6edf3' : 'inherit'
                 },
                 '& blockquote': {
                   borderLeft: `4px solid ${colorStyles.border.default}`,
