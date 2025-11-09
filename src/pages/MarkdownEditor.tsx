@@ -112,14 +112,21 @@ export function MarkdownEditor() {
     mermaid.initialize({
       startOnLoad: false,
       theme: colorMode === 'dark' ? 'dark' : 'default',
-      securityLevel: 'loose',
+      securityLevel: 'strict',
+      fontFamily: 'ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
     })
     
     // カラーモード変更時に、既存のMermaid図を再レンダリング可能にする
     if (previewRef.current) {
       const mermaidDivs = previewRef.current.querySelectorAll('.mermaid-diagram.mermaid-rendered')
       mermaidDivs.forEach((div) => {
-        div.classList.remove('mermaid-rendered')
+        const element = div as HTMLElement
+        // 元のコードを取得して復元
+        const originalCode = element.getAttribute('data-mermaid-code')
+        if (originalCode) {
+          element.textContent = originalCode
+        }
+        element.classList.remove('mermaid-rendered')
       })
     }
   }, [colorMode])
@@ -183,8 +190,8 @@ export function MarkdownEditor() {
         }
         
         try {
-          // 一意のIDを生成
-          const uniqueId = `mermaid-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`
+          // 一意のIDを生成 - タイムスタンプを使用して確実にユニークにする
+          const uniqueId = `mermaid-${Math.random().toString(36).substr(2, 9)}-${Date.now()}-${i}`
           
           // セキュリティ対策: Mermaidコードのサイズ制限（10KB）
           const maxCodeSize = 10 * 1024
@@ -192,20 +199,29 @@ export function MarkdownEditor() {
             throw new Error('Mermaid diagram too large')
           }
           
+          // 古いMermaid要素をクリーンアップ
+          const oldMermaidElements = document.querySelectorAll(`[id^="mermaid-"]`)
+          oldMermaidElements.forEach(el => {
+            if (el.id !== uniqueId && !el.closest('.mermaid-diagram')) {
+              el.remove()
+            }
+          })
+          
           const { svg } = await mermaid.render(uniqueId, code)
           
           // Mermaidが生成するSVGを挿入
-          // 注: DOMPurifyは foreignObject 内の HTML 要素を削除してしまうため使用しない
-          // Mermaidライブラリ自体が安全なSVG出力を生成し、ユーザー入力は図の構造のみを制御する
-          // （任意のHTML/JavaScriptの挿入は不可能）
-          // さらに、元のmarkdown contentはDOMPurifyで既にサニタイズ済み
           div.innerHTML = svg
           div.classList.add('mermaid-rendered')
         } catch (error) {
           console.error('Mermaid render error:', error)
           // エラーメッセージをテキストとして安全に表示
-          div.textContent = `Error rendering Mermaid diagram: ${error instanceof Error ? error.message : 'Unknown error'}`
-          div.style.color = 'red'
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+          div.textContent = `Error rendering Mermaid diagram: ${errorMsg}`
+          div.style.color = colorMode === 'dark' ? '#ff7b72' : '#d73a49'
+          div.style.padding = '1em'
+          div.style.backgroundColor = colorMode === 'dark' ? 'rgba(255, 123, 114, 0.1)' : 'rgba(215, 58, 73, 0.1)'
+          div.style.borderRadius = '6px'
+          div.classList.add('mermaid-rendered') // Mark as processed even on error
         }
       }
     }
@@ -221,10 +237,10 @@ export function MarkdownEditor() {
       return
     }
     
-    // DOM更新を待ってからハイライトを適用
+    // Mermaid rendering completes after 100ms, so we wait 150ms to ensure it's done
     const timer = setTimeout(() => {
       reapplyHighlighting()
-    }, 50)
+    }, 150)
     
     return () => clearTimeout(timer)
   }, [processedHTML, viewMode, colorMode])
