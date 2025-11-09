@@ -14,6 +14,8 @@ import mermaid from 'mermaid'
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import DOMPurify from 'dompurify'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github.css'
 import { Download, Upload, FileText } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
@@ -95,6 +97,16 @@ export function MarkdownEditor() {
       (_, code) => `<div class="mermaid-diagram">${code}</div>`
     )
   }, [renderedHTML])
+
+  // コードブロックにシンタックスハイライトを適用
+  useEffect(() => {
+    if (previewRef.current && (viewMode === 'preview' || viewMode === 'split')) {
+      const codeBlocks = previewRef.current.querySelectorAll('pre code:not(.mermaid-diagram)')
+      codeBlocks.forEach((block) => {
+        hljs.highlightElement(block as HTMLElement)
+      })
+    }
+  }, [processedHTML, viewMode])
 
   // ファイル保存
   const handleSave = () => {
