@@ -279,57 +279,171 @@ export function MarkdownEditor() {
       const originalWidth = previewElement.style.width
       const originalMaxWidth = previewElement.style.maxWidth
       
-      // モバイルの場合、一時的に幅を広げてPDF生成
-      if (isMobile) {
-        previewElement.style.width = '800px'
-        previewElement.style.maxWidth = '800px'
-      }
+      // PDF用に一時的にライトモードのスタイルを適用
+      const originalBgColor = previewElement.style.backgroundColor
+      const originalColor = previewElement.style.color
+      previewElement.setAttribute('data-pdf-export', 'true')
       
-      // プレビュー要素をキャンバスに変換
-      const canvas = await html2canvas(previewElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: isMobile ? 800 : undefined,
-        width: isMobile ? 800 : undefined
-      })
-      
-      // スタイルを元に戻す
-      if (isMobile) {
-        previewElement.style.width = originalWidth
-        previewElement.style.maxWidth = originalMaxWidth
-      }
-      
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      })
-      
-      const pdfWidth = 210 // A4 width in mm
-      const pdfHeight = 297 // A4 height in mm
-      const margin = 10 // マージン
-      const contentWidth = pdfWidth - (margin * 2)
-      const imgWidth = contentWidth
-      const imgHeight = (canvas.height * contentWidth) / canvas.width
-      let heightLeft = imgHeight
-      let position = margin
-      
-      // 最初のページ
-      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-      heightLeft -= (pdfHeight - margin * 2)
-      
-      // 複数ページの場合
-      while (heightLeft > 0) {
-        position = -(imgHeight - heightLeft) + margin
-        pdf.addPage()
+      // ライトモード用の一時的なスタイルを設定
+      if (colorMode === 'dark') {
+        previewElement.style.backgroundColor = '#ffffff'
+        previewElement.style.color = '#24292f'
+        
+        // コードブロックのスタイルを一時的に変更
+        const codeBlocks = previewElement.querySelectorAll('pre')
+        const inlineCodes = previewElement.querySelectorAll('code')
+        const originalStyles: Array<{element: HTMLElement, bgColor: string, color: string}> = []
+        
+        codeBlocks.forEach((pre) => {
+          const element = pre as HTMLElement
+          originalStyles.push({
+            element,
+            bgColor: element.style.backgroundColor,
+            color: element.style.color
+          })
+          element.style.backgroundColor = '#f6f8fa'
+          element.style.borderColor = '#d0d7de'
+          
+          const code = pre.querySelector('code')
+          if (code) {
+            const codeEl = code as HTMLElement
+            originalStyles.push({
+              element: codeEl,
+              bgColor: codeEl.style.backgroundColor,
+              color: codeEl.style.color
+            })
+            codeEl.style.color = '#24292f'
+          }
+        })
+        
+        inlineCodes.forEach((code) => {
+          const element = code as HTMLElement
+          // <pre>内の<code>は既に処理済みなので、親が<pre>でない場合のみ処理
+          if (element.parentElement?.tagName !== 'PRE') {
+            originalStyles.push({
+              element,
+              bgColor: element.style.backgroundColor,
+              color: element.style.color
+            })
+            element.style.backgroundColor = 'rgba(175, 184, 193, 0.2)'
+            element.style.color = '#24292f'
+          }
+        })
+        
+        // モバイルの場合、一時的に幅を広げてPDF生成
+        if (isMobile) {
+          previewElement.style.width = '800px'
+          previewElement.style.maxWidth = '800px'
+        }
+        
+        // プレビュー要素をキャンバスに変換
+        const canvas = await html2canvas(previewElement, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          windowWidth: isMobile ? 800 : undefined,
+          width: isMobile ? 800 : undefined
+        })
+        
+        // スタイルを元に戻す
+        previewElement.style.backgroundColor = originalBgColor
+        previewElement.style.color = originalColor
+        originalStyles.forEach(({element, bgColor, color}) => {
+          element.style.backgroundColor = bgColor
+          element.style.color = color
+        })
+        
+        if (isMobile) {
+          previewElement.style.width = originalWidth
+          previewElement.style.maxWidth = originalMaxWidth
+        }
+        previewElement.removeAttribute('data-pdf-export')
+        
+        const imgData = canvas.toDataURL('image/png')
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        })
+        
+        const pdfWidth = 210 // A4 width in mm
+        const pdfHeight = 297 // A4 height in mm
+        const margin = 10 // マージン
+        const contentWidth = pdfWidth - (margin * 2)
+        const imgWidth = contentWidth
+        const imgHeight = (canvas.height * contentWidth) / canvas.width
+        let heightLeft = imgHeight
+        let position = margin
+        
+        // 最初のページ
         pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
         heightLeft -= (pdfHeight - margin * 2)
+        
+        // 複数ページの場合
+        while (heightLeft > 0) {
+          position = -(imgHeight - heightLeft) + margin
+          pdf.addPage()
+          pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+          heightLeft -= (pdfHeight - margin * 2)
+        }
+        
+        pdf.save('document.pdf')
+        showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
+      } else {
+        // ライトモードの場合は通常通り
+        // モバイルの場合、一時的に幅を広げてPDF生成
+        if (isMobile) {
+          previewElement.style.width = '800px'
+          previewElement.style.maxWidth = '800px'
+        }
+        
+        // プレビュー要素をキャンバスに変換
+        const canvas = await html2canvas(previewElement, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          windowWidth: isMobile ? 800 : undefined,
+          width: isMobile ? 800 : undefined
+        })
+        
+        // スタイルを元に戻す
+        if (isMobile) {
+          previewElement.style.width = originalWidth
+          previewElement.style.maxWidth = originalMaxWidth
+        }
+        previewElement.removeAttribute('data-pdf-export')
+        
+        const imgData = canvas.toDataURL('image/png')
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4'
+        })
+        
+        const pdfWidth = 210 // A4 width in mm
+        const pdfHeight = 297 // A4 height in mm
+        const margin = 10 // マージン
+        const contentWidth = pdfWidth - (margin * 2)
+        const imgWidth = contentWidth
+        const imgHeight = (canvas.height * contentWidth) / canvas.width
+        let heightLeft = imgHeight
+        let position = margin
+        
+        // 最初のページ
+        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+        heightLeft -= (pdfHeight - margin * 2)
+        
+        // 複数ページの場合
+        while (heightLeft > 0) {
+          position = -(imgHeight - heightLeft) + margin
+          pdf.addPage()
+          pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
+          heightLeft -= (pdfHeight - margin * 2)
+        }
+        
+        pdf.save('document.pdf')
+        showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
       }
-      
-      pdf.save('document.pdf')
-      showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
     } catch (error) {
       console.error('PDF export error:', error)
       showToast('PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
