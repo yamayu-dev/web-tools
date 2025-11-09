@@ -27,7 +27,7 @@ mermaid.initialize({
 })
 
 export function MarkdownEditor() {
-  const [markdown, setMarkdown] = useState<string>('# Markdown Editor\n\n書いてみよう！\n\n## Features\n- Markdown preview\n- Mermaid diagrams\n- File save/load\n- PDF export\n\n## Mermaid Example\n```mermaid\ngraph TD\n  A[Start] --> B[Process]\n  B --> C[End]\n```')
+  const [markdown, setMarkdown] = useState<string>('')
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split')
   const previewRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -372,15 +372,15 @@ export function MarkdownEditor() {
               rounded="md"
               overflowY="auto"
               css={{
-                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em' },
-                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em' },
-                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em' },
-                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em' },
-                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em' },
-                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em' },
-                '& p': { marginTop: '1em', marginBottom: '1em' },
-                '& ul, & ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em' },
-                '& li': { marginTop: '0.5em', marginBottom: '0.5em' },
+                '& h1': { fontSize: '2em', fontWeight: 'bold', marginTop: '0.67em', marginBottom: '0.67em', textAlign: 'left' },
+                '& h2': { fontSize: '1.5em', fontWeight: 'bold', marginTop: '0.83em', marginBottom: '0.83em', textAlign: 'left' },
+                '& h3': { fontSize: '1.17em', fontWeight: 'bold', marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
+                '& h4': { fontSize: '1em', fontWeight: 'bold', marginTop: '1.33em', marginBottom: '1.33em', textAlign: 'left' },
+                '& h5': { fontSize: '0.83em', fontWeight: 'bold', marginTop: '1.67em', marginBottom: '1.67em', textAlign: 'left' },
+                '& h6': { fontSize: '0.67em', fontWeight: 'bold', marginTop: '2.33em', marginBottom: '2.33em', textAlign: 'left' },
+                '& p': { marginTop: '1em', marginBottom: '1em', textAlign: 'left' },
+                '& ul, & ol': { marginTop: '1em', marginBottom: '1em', paddingLeft: '2em', textAlign: 'left' },
+                '& li': { marginTop: '0.5em', marginBottom: '0.5em', textAlign: 'left' },
                 '& code': { 
                   backgroundColor: colorStyles.bg.secondary, 
                   padding: '0.2em 0.4em', 
@@ -394,7 +394,8 @@ export function MarkdownEditor() {
                   borderRadius: '6px',
                   overflowX: 'auto',
                   marginTop: '1em',
-                  marginBottom: '1em'
+                  marginBottom: '1em',
+                  textAlign: 'left'
                 },
                 '& pre code': {
                   backgroundColor: 'transparent',
@@ -406,7 +407,8 @@ export function MarkdownEditor() {
                   marginLeft: 0,
                   marginTop: '1em',
                   marginBottom: '1em',
-                  color: colorStyles.text.secondary
+                  color: colorStyles.text.secondary,
+                  textAlign: 'left'
                 },
                 '& table': {
                   borderCollapse: 'collapse',
