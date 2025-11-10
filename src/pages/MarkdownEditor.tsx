@@ -157,13 +157,17 @@ export function MarkdownEditor() {
     )
   }, [renderedHTML])
 
-  // Update preview innerHTML only when processedHTML actually changes
+  // Update preview innerHTML when processedHTML changes or when switching to preview mode
   useEffect(() => {
-    if (previewRef.current && processedHTML !== lastProcessedHTMLRef.current) {
-      previewRef.current.innerHTML = processedHTML
-      lastProcessedHTMLRef.current = processedHTML
+    const shouldShowPreview = viewMode === 'preview' || viewMode === 'split'
+    if (previewRef.current && shouldShowPreview) {
+      // Always update innerHTML when switching to preview mode or when content changes
+      if (processedHTML !== lastProcessedHTMLRef.current || previewRef.current.innerHTML === '') {
+        previewRef.current.innerHTML = processedHTML
+        lastProcessedHTMLRef.current = processedHTML
+      }
     }
-  }, [processedHTML])
+  }, [processedHTML, viewMode])
 
   // Mermaidダイアグラムを処理
   useEffect(() => {
