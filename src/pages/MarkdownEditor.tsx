@@ -11,8 +11,6 @@ import {
 } from '@chakra-ui/react'
 import { marked } from 'marked'
 import mermaid from 'mermaid'
-import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
@@ -22,12 +20,14 @@ import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
+import { pdfExportManager, PDF_EXPORT_METHODS, type PdfExportMethod } from '../utils/pdfExport'
 
 // Mermaid will be initialized dynamically based on color mode
 
 export function MarkdownEditor() {
   const [markdown, setMarkdown] = useState<string>('')
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split')
+  const [pdfExportMethod, setPdfExportMethod] = useState<PdfExportMethod>('overlay')
   const previewRef = useRef<HTMLDivElement>(null)
   const lastProcessedHTMLRef = useRef<string>('') // Track last processed HTML
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -323,123 +323,30 @@ export function MarkdownEditor() {
       showToast('出力する内容がありません', TOAST_DURATIONS.ERROR)
       return
     }
-    
+
     try {
-      showToast('PDF生成中...', TOAST_DURATIONS.SHORT)
+      // 選択されたストラテジーを取得
+      const strategy = pdfExportManager.getStrategy(pdfExportMethod)
       
-      const previewElement = previewRef.current
-      const originalWidth = previewElement.style.width
-      const originalMaxWidth = previewElement.style.maxWidth
-      
-      // PDF用に一時的にライトモードのスタイルを適用（PDFは常にライトモード）
-      const originalBgColor = previewElement.style.backgroundColor
-      const originalColor = previewElement.style.color
-      previewElement.setAttribute('data-pdf-export', 'true')
-      
-      // ライトモード用の一時的なスタイルを設定
-      previewElement.style.backgroundColor = '#ffffff'
-      previewElement.style.color = '#24292f'
-      
-      // コードブロックのスタイルを一時的に変更
-      const codeBlocks = previewElement.querySelectorAll('pre')
-      const inlineCodes = previewElement.querySelectorAll('code')
-      const originalStyles: Array<{element: HTMLElement, bgColor: string, color: string}> = []
-      
-      codeBlocks.forEach((pre) => {
-        const element = pre as HTMLElement
-        originalStyles.push({
-          element,
-          bgColor: element.style.backgroundColor,
-          color: element.style.color
-        })
-        element.style.backgroundColor = '#f6f8fa'
-        element.style.borderColor = '#d0d7de'
-        
-        const code = pre.querySelector('code')
-        if (code) {
-          const codeEl = code as HTMLElement
-          originalStyles.push({
-            element: codeEl,
-            bgColor: codeEl.style.backgroundColor,
-            color: codeEl.style.color
-          })
-          codeEl.style.color = '#24292f'
-        }
-      })
-      
-      inlineCodes.forEach((code) => {
-        const element = code as HTMLElement
-        // <pre>内の<code>は既に処理済みなので、親が<pre>でない場合のみ処理
-        if (element.parentElement?.tagName !== 'PRE') {
-          originalStyles.push({
-            element,
-            bgColor: element.style.backgroundColor,
-            color: element.style.color
-          })
-          element.style.backgroundColor = 'rgba(175, 184, 193, 0.2)'
-          element.style.color = '#24292f'
-        }
-      })
-      
-      // モバイルの場合、一時的に幅を広げてPDF生成
-      if (isMobile) {
-        previewElement.style.width = '800px'
-        previewElement.style.maxWidth = '800px'
+      if (!strategy) {
+        showToast('選択されたPDF出力方法が見つかりません', TOAST_DURATIONS.ERROR)
+        return
       }
-      
-      // プレビュー要素をキャンバスに変換
-      const canvas = await html2canvas(previewElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: isMobile ? 800 : undefined,
-        width: isMobile ? 800 : undefined
+
+      // PDF出力を実行
+      const result = await strategy.export({
+        markdown,
+        previewElement: previewRef.current,
+        colorMode,
+        isMobile: isMobile || false,
+        onProgress: (message) => showToast(message, TOAST_DURATIONS.SHORT)
       })
-      
-      // スタイルを元に戻す
-      previewElement.style.backgroundColor = originalBgColor
-      previewElement.style.color = originalColor
-      originalStyles.forEach(({element, bgColor, color}) => {
-        element.style.backgroundColor = bgColor
-        element.style.color = color
-      })
-      
-      if (isMobile) {
-        previewElement.style.width = originalWidth
-        previewElement.style.maxWidth = originalMaxWidth
+
+      if (result.success) {
+        showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
+      } else {
+        showToast(result.error || 'PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
       }
-      previewElement.removeAttribute('data-pdf-export')
-      
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      })
-      
-      const pdfWidth = 210 // A4 width in mm
-      const pdfHeight = 297 // A4 height in mm
-      const margin = 10 // マージン
-      const contentWidth = pdfWidth - (margin * 2)
-      const imgWidth = contentWidth
-      const imgHeight = (canvas.height * contentWidth) / canvas.width
-      let heightLeft = imgHeight
-      let position = margin
-      
-      // 最初のページ
-      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-      heightLeft -= (pdfHeight - margin * 2)
-      
-      // 複数ページの場合
-      while (heightLeft > 0) {
-        position = -(imgHeight - heightLeft) + margin
-        pdf.addPage()
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-        heightLeft -= (pdfHeight - margin * 2)
-      }
-      
-      pdf.save('document.pdf')
-      showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
     } catch (error) {
       console.error('PDF export error:', error)
       showToast('PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
@@ -545,7 +452,34 @@ export function MarkdownEditor() {
           </Box>
 
           {/* ファイル操作 */}
-          <Flex gap={2} flexWrap="wrap">
+          <Flex gap={2} flexWrap="wrap" alignItems="flex-end">
+            {/* PDF出力方法選択 */}
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} color={colorStyles.text.primary}>
+                PDF出力方法
+              </Text>
+              <select
+                value={pdfExportMethod}
+                onChange={(e) => setPdfExportMethod(e.target.value as PdfExportMethod)}
+                style={{
+                  fontSize: '14px',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  backgroundColor: colorStyles.bg.primary,
+                  color: colorStyles.text.primary,
+                  border: `1px solid ${colorStyles.border.default}`,
+                  cursor: 'pointer',
+                  width: '200px',
+                  height: '32px'
+                }}>
+                {(Object.keys(PDF_EXPORT_METHODS) as PdfExportMethod[]).map((method) => (
+                  <option key={method} value={method}>
+                    {PDF_EXPORT_METHODS[method].label}
+                  </option>
+                ))}
+              </select>
+            </Box>
+
             <input
               ref={fileInputRef}
               type="file"
