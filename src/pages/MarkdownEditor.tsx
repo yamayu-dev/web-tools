@@ -325,20 +325,42 @@ export function MarkdownEditor() {
     }
     
     let clonedElement: HTMLElement | null = null
+    let overlayElement: HTMLElement | null = null
     
     try {
       showToast('PDF生成中...', TOAST_DURATIONS.SHORT)
       
       const previewElement = previewRef.current
       
-      // プレビュー要素の完全なクローンを作成（非表示）
+      // 画面を一時的に覆うオーバーレイを作成（ユーザーに変化を見せない）
+      overlayElement = document.createElement('div')
+      overlayElement.style.position = 'fixed'
+      overlayElement.style.top = '0'
+      overlayElement.style.left = '0'
+      overlayElement.style.width = '100vw'
+      overlayElement.style.height = '100vh'
+      overlayElement.style.backgroundColor = colorMode === 'dark' ? '#0d1117' : '#ffffff'
+      overlayElement.style.zIndex = '9999'
+      overlayElement.style.display = 'flex'
+      overlayElement.style.alignItems = 'center'
+      overlayElement.style.justifyContent = 'center'
+      overlayElement.style.color = colorMode === 'dark' ? '#e6edf3' : '#24292f'
+      overlayElement.style.fontSize = '18px'
+      overlayElement.style.fontWeight = 'bold'
+      overlayElement.textContent = 'PDF生成中...'
+      document.body.appendChild(overlayElement)
+      
+      // 少し待ってからPDF生成を開始（オーバーレイが表示されるのを待つ）
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
+      // プレビュー要素の完全なクローンを作成
       clonedElement = previewElement.cloneNode(true) as HTMLElement
       
-      // クローンを非表示でドキュメントに追加
+      // クローンを一時的にbodyに追加（on-screen、html2canvasが正しくレンダリングできる位置）
       clonedElement.style.position = 'fixed'
-      clonedElement.style.left = '-9999px'
-      clonedElement.style.top = '-9999px'
-      clonedElement.style.visibility = 'hidden'
+      clonedElement.style.left = '0'
+      clonedElement.style.top = '0'
+      clonedElement.style.zIndex = '10000' // オーバーレイより上に配置
       clonedElement.style.pointerEvents = 'none'
       
       // モバイルの場合、クローンの幅を設定
@@ -465,6 +487,9 @@ export function MarkdownEditor() {
         })
       })
       
+      // 少し待ってからhtml2canvasを実行（スタイルが適用されるのを待つ）
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
       // クローンをキャンバスに変換
       const canvas = await html2canvas(clonedElement, {
         scale: 2,
@@ -475,10 +500,14 @@ export function MarkdownEditor() {
         backgroundColor: '#ffffff'
       })
       
-      // クローンを削除
+      // クローンとオーバーレイを削除
       if (clonedElement && clonedElement.parentNode) {
         document.body.removeChild(clonedElement)
         clonedElement = null
+      }
+      if (overlayElement && overlayElement.parentNode) {
+        document.body.removeChild(overlayElement)
+        overlayElement = null
       }
       
       const imgData = canvas.toDataURL('image/png')
@@ -515,9 +544,12 @@ export function MarkdownEditor() {
       console.error('PDF export error:', error)
       showToast('PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
       
-      // エラー時もクローンを確実に削除
+      // エラー時もクローンとオーバーレイを確実に削除
       if (clonedElement && clonedElement.parentNode) {
         document.body.removeChild(clonedElement)
+      }
+      if (overlayElement && overlayElement.parentNode) {
+        document.body.removeChild(overlayElement)
       }
     }
   }
