@@ -6,29 +6,39 @@
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import type { IPdfExportStrategy, PdfExportOptions, PdfExportResult } from './types'
+import { createPreviewElement, cleanupPreviewElement } from './previewHelper'
 
 export class OffscreenPdfExportStrategy implements IPdfExportStrategy {
   name = 'offscreen'
   description = 'オフスクリーン方式'
 
   async export(options: PdfExportOptions): Promise<PdfExportResult> {
-    const { previewElement, isMobile, onProgress } = options
+    const { markdown, previewElement, isMobile, onProgress } = options
 
     let clonedElement: HTMLElement | null = null
+    let tempPreviewElement: HTMLElement | null = null
 
     try {
       onProgress?.('PDF生成中（オフスクリーン）...')
 
+      // プレビュー要素が存在しない場合は一時的に作成
+      let sourceElement = previewElement
+      if (!sourceElement || !sourceElement.parentNode) {
+        tempPreviewElement = await createPreviewElement(markdown, 'light')
+        sourceElement = tempPreviewElement
+      }
+
       // プレビュー要素のクローンを作成
-      clonedElement = previewElement.cloneNode(true) as HTMLElement
+      clonedElement = sourceElement.cloneNode(true) as HTMLElement
       
-      // 画面外に配置（左側-10000pxに配置し、opacity 0で完全に非表示）
-      clonedElement.style.position = 'fixed'
-      clonedElement.style.left = '-10000px'
+      // 画面外に配置し、完全に非表示にする
+      clonedElement.style.position = 'absolute' // fixed から absolute に変更
+      clonedElement.style.left = '-9999px'
       clonedElement.style.top = '0'
-      clonedElement.style.opacity = '0'
+      clonedElement.style.visibility = 'visible' // visible に設定（html2canvas用）
+      clonedElement.style.opacity = '1' // opacity を 1 に設定
       clonedElement.style.pointerEvents = 'none'
-      clonedElement.style.zIndex = '-9999'
+      clonedElement.style.zIndex = '-1'
 
       if (isMobile) {
         clonedElement.style.width = '800px'
@@ -40,7 +50,7 @@ export class OffscreenPdfExportStrategy implements IPdfExportStrategy {
       // ライトモードのスタイルを適用
       this.applyLightModeStyles(clonedElement)
 
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise(resolve => setTimeout(resolve, 200)) // 待機時間を増やす
 
       // html2canvasでキャンバスに変換
       const canvas = await html2canvas(clonedElement, {
@@ -49,13 +59,20 @@ export class OffscreenPdfExportStrategy implements IPdfExportStrategy {
         logging: false,
         windowWidth: isMobile ? 800 : undefined,
         width: isMobile ? 800 : undefined,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        // オフスクリーン要素のレンダリング用オプション
+        foreignObjectRendering: false,
+        allowTaint: false
       })
 
       // クリーンアップ
       if (clonedElement?.parentNode) {
         document.body.removeChild(clonedElement)
         clonedElement = null
+      }
+      if (tempPreviewElement) {
+        cleanupPreviewElement(tempPreviewElement)
+        tempPreviewElement = null
       }
 
       // PDFを生成
@@ -92,6 +109,9 @@ export class OffscreenPdfExportStrategy implements IPdfExportStrategy {
       // クリーンアップ
       if (clonedElement?.parentNode) {
         document.body.removeChild(clonedElement)
+      }
+      if (tempPreviewElement) {
+        cleanupPreviewElement(tempPreviewElement)
       }
 
       return {
