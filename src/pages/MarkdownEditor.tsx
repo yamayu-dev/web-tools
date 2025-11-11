@@ -324,91 +324,162 @@ export function MarkdownEditor() {
       return
     }
     
+    let clonedElement: HTMLElement | null = null
+    
     try {
       showToast('PDF生成中...', TOAST_DURATIONS.SHORT)
       
       const previewElement = previewRef.current
-      const originalWidth = previewElement.style.width
-      const originalMaxWidth = previewElement.style.maxWidth
       
-      // PDF用に一時的にライトモードのスタイルを適用（PDFは常にライトモード）
-      const originalBgColor = previewElement.style.backgroundColor
-      const originalColor = previewElement.style.color
-      previewElement.setAttribute('data-pdf-export', 'true')
+      // プレビュー要素の完全なクローンを作成（非表示）
+      clonedElement = previewElement.cloneNode(true) as HTMLElement
       
-      // ライトモード用の一時的なスタイルを設定
-      previewElement.style.backgroundColor = '#ffffff'
-      previewElement.style.color = '#24292f'
+      // クローンを非表示でドキュメントに追加
+      clonedElement.style.position = 'fixed'
+      clonedElement.style.left = '-9999px'
+      clonedElement.style.top = '-9999px'
+      clonedElement.style.visibility = 'hidden'
+      clonedElement.style.pointerEvents = 'none'
       
-      // コードブロックのスタイルを一時的に変更
-      const codeBlocks = previewElement.querySelectorAll('pre')
-      const inlineCodes = previewElement.querySelectorAll('code')
-      const originalStyles: Array<{element: HTMLElement, bgColor: string, color: string}> = []
+      // モバイルの場合、クローンの幅を設定
+      if (isMobile) {
+        clonedElement.style.width = '800px'
+        clonedElement.style.maxWidth = '800px'
+      }
       
+      document.body.appendChild(clonedElement)
+      
+      // クローンにライトモードのスタイルを適用（PDFは常にライトモード）
+      clonedElement.style.backgroundColor = '#ffffff'
+      clonedElement.style.color = '#24292f'
+      
+      // すべてのテキスト要素にライトモードの色を適用
+      const allElements = clonedElement.querySelectorAll('*')
+      allElements.forEach((el) => {
+        const element = el as HTMLElement
+        // テキスト色をライトモードに
+        if (window.getComputedStyle(element).color.includes('255, 255, 255') || 
+            window.getComputedStyle(element).color.includes('230, 237, 243')) {
+          element.style.color = '#24292f'
+        }
+      })
+      
+      // 見出しの色を設定
+      const headings = clonedElement.querySelectorAll('h1, h2, h3, h4, h5, h6')
+      headings.forEach((heading) => {
+        const element = heading as HTMLElement
+        element.style.color = '#24292f'
+      })
+      
+      // 段落の色を設定
+      const paragraphs = clonedElement.querySelectorAll('p')
+      paragraphs.forEach((p) => {
+        const element = p as HTMLElement
+        element.style.color = '#24292f'
+      })
+      
+      // リストアイテムの色を設定
+      const listItems = clonedElement.querySelectorAll('li')
+      listItems.forEach((li) => {
+        const element = li as HTMLElement
+        element.style.color = '#24292f'
+      })
+      
+      // コードブロックのスタイルを変更
+      const codeBlocks = clonedElement.querySelectorAll('pre')
       codeBlocks.forEach((pre) => {
         const element = pre as HTMLElement
-        originalStyles.push({
-          element,
-          bgColor: element.style.backgroundColor,
-          color: element.style.color
-        })
         element.style.backgroundColor = '#f6f8fa'
         element.style.borderColor = '#d0d7de'
         
         const code = pre.querySelector('code')
         if (code) {
           const codeEl = code as HTMLElement
-          originalStyles.push({
-            element: codeEl,
-            bgColor: codeEl.style.backgroundColor,
-            color: codeEl.style.color
-          })
           codeEl.style.color = '#24292f'
+          
+          // highlight.jsのクラスを持つ要素の色を変更
+          const highlightedElements = codeEl.querySelectorAll('[class*="hljs"]')
+          highlightedElements.forEach((hlEl) => {
+            const hlElement = hlEl as HTMLElement
+            // ダークモード特有の色をライトモードに変換
+            const computedColor = window.getComputedStyle(hlElement).color
+            if (computedColor.includes('230, 237, 243')) { // #e6edf3
+              hlElement.style.color = '#24292f'
+            } else if (computedColor.includes('139, 148, 158')) { // #8b949e (comment)
+              hlElement.style.color = '#6a737d'
+            } else if (computedColor.includes('255, 123, 114')) { // #ff7b72 (keyword)
+              hlElement.style.color = '#d73a49'
+            } else if (computedColor.includes('121, 192, 255')) { // #79c0ff (number/variable)
+              hlElement.style.color = '#005cc5'
+            } else if (computedColor.includes('165, 214, 255')) { // #a5d6ff (string)
+              hlElement.style.color = '#032f62'
+            } else if (computedColor.includes('210, 168, 255')) { // #d2a8ff (title)
+              hlElement.style.color = '#6f42c1'
+            } else if (computedColor.includes('255, 166, 87')) { // #ffa657 (built_in)
+              hlElement.style.color = '#e36209'
+            } else if (computedColor.includes('126, 231, 135')) { // #7ee787 (name/tag)
+              hlElement.style.color = '#22863a'
+            }
+          })
         }
       })
       
+      // インラインコードのスタイルを変更
+      const inlineCodes = clonedElement.querySelectorAll('code')
       inlineCodes.forEach((code) => {
         const element = code as HTMLElement
         // <pre>内の<code>は既に処理済みなので、親が<pre>でない場合のみ処理
         if (element.parentElement?.tagName !== 'PRE') {
-          originalStyles.push({
-            element,
-            bgColor: element.style.backgroundColor,
-            color: element.style.color
-          })
           element.style.backgroundColor = 'rgba(175, 184, 193, 0.2)'
           element.style.color = '#24292f'
         }
       })
       
-      // モバイルの場合、一時的に幅を広げてPDF生成
-      if (isMobile) {
-        previewElement.style.width = '800px'
-        previewElement.style.maxWidth = '800px'
-      }
+      // blockquoteの色を設定
+      const blockquotes = clonedElement.querySelectorAll('blockquote')
+      blockquotes.forEach((bq) => {
+        const element = bq as HTMLElement
+        element.style.color = '#57606a'
+        element.style.borderLeftColor = '#d0d7de'
+      })
       
-      // プレビュー要素をキャンバスに変換
-      const canvas = await html2canvas(previewElement, {
+      // テーブルのスタイルを設定
+      const tables = clonedElement.querySelectorAll('table')
+      tables.forEach((table) => {
+        const element = table as HTMLElement
+        element.style.color = '#24292f'
+        
+        const ths = table.querySelectorAll('th')
+        ths.forEach((th) => {
+          const thEl = th as HTMLElement
+          thEl.style.backgroundColor = '#f6f8fa'
+          thEl.style.borderColor = '#d0d7de'
+          thEl.style.color = '#24292f'
+        })
+        
+        const tds = table.querySelectorAll('td')
+        tds.forEach((td) => {
+          const tdEl = td as HTMLElement
+          tdEl.style.borderColor = '#d0d7de'
+          tdEl.style.color = '#24292f'
+        })
+      })
+      
+      // クローンをキャンバスに変換
+      const canvas = await html2canvas(clonedElement, {
         scale: 2,
         useCORS: true,
         logging: false,
         windowWidth: isMobile ? 800 : undefined,
-        width: isMobile ? 800 : undefined
+        width: isMobile ? 800 : undefined,
+        backgroundColor: '#ffffff'
       })
       
-      // スタイルを元に戻す
-      previewElement.style.backgroundColor = originalBgColor
-      previewElement.style.color = originalColor
-      originalStyles.forEach(({element, bgColor, color}) => {
-        element.style.backgroundColor = bgColor
-        element.style.color = color
-      })
-      
-      if (isMobile) {
-        previewElement.style.width = originalWidth
-        previewElement.style.maxWidth = originalMaxWidth
+      // クローンを削除
+      if (clonedElement && clonedElement.parentNode) {
+        document.body.removeChild(clonedElement)
+        clonedElement = null
       }
-      previewElement.removeAttribute('data-pdf-export')
       
       const imgData = canvas.toDataURL('image/png')
       const pdf = new jsPDF({
@@ -443,6 +514,11 @@ export function MarkdownEditor() {
     } catch (error) {
       console.error('PDF export error:', error)
       showToast('PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
+      
+      // エラー時もクローンを確実に削除
+      if (clonedElement && clonedElement.parentNode) {
+        document.body.removeChild(clonedElement)
+      }
     }
   }
 
