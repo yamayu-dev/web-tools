@@ -6,21 +6,31 @@
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import type { IPdfExportStrategy, PdfExportOptions, PdfExportResult } from './types'
+import { createPreviewElement, cleanupPreviewElement } from './previewHelper'
 
 export class OverlayPdfExportStrategy implements IPdfExportStrategy {
   name = 'overlay'
   description = 'オーバーレイ方式（現在の実装）'
 
   async export(options: PdfExportOptions): Promise<PdfExportResult> {
-    const { previewElement, colorMode, isMobile, onProgress } = options
+    const { markdown, previewElement, colorMode, isMobile, onProgress } = options
 
     let clonedElement: HTMLElement | null = null
     let overlayElement: HTMLElement | null = null
+    let tempPreviewElement: HTMLElement | null = null
 
     try {
       onProgress?.('PDF生成中...')
 
+      // プレビュー要素が存在しない場合は一時的に作成
+      let sourceElement = previewElement
+      if (!sourceElement || !sourceElement.parentNode) {
+        tempPreviewElement = await createPreviewElement(markdown, colorMode)
+        sourceElement = tempPreviewElement
+      }
+
       // 画面を一時的に覆うオーバーレイを作成
+      // 現在のカラーモードと同じ色にすることでフラッシュを防ぐ
       overlayElement = document.createElement('div')
       overlayElement.style.position = 'fixed'
       overlayElement.style.top = '0'
@@ -41,12 +51,14 @@ export class OverlayPdfExportStrategy implements IPdfExportStrategy {
       await new Promise(resolve => setTimeout(resolve, 100))
 
       // プレビュー要素のクローンを作成
-      clonedElement = previewElement.cloneNode(true) as HTMLElement
+      clonedElement = sourceElement.cloneNode(true) as HTMLElement
+      // クローン要素をオーバーレイの後ろに配置（ユーザーには見えない）
       clonedElement.style.position = 'fixed'
       clonedElement.style.left = '0'
       clonedElement.style.top = '0'
-      clonedElement.style.zIndex = '10000'
+      clonedElement.style.zIndex = '9998' // オーバーレイより下
       clonedElement.style.pointerEvents = 'none'
+      clonedElement.style.visibility = 'hidden' // 完全に非表示
 
       if (isMobile) {
         clonedElement.style.width = '800px'
@@ -61,13 +73,18 @@ export class OverlayPdfExportStrategy implements IPdfExportStrategy {
       await new Promise(resolve => setTimeout(resolve, 100))
 
       // html2canvasでキャンバスに変換
+      // visibility: hidden の要素も強制的にレンダリング
       const canvas = await html2canvas(clonedElement, {
         scale: 2,
         useCORS: true,
         logging: false,
         windowWidth: isMobile ? 800 : undefined,
         width: isMobile ? 800 : undefined,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        ignoreElements: (element) => {
+          // オーバーレイ要素は無視
+          return element === overlayElement
+        }
       })
 
       // クリーンアップ
@@ -78,6 +95,10 @@ export class OverlayPdfExportStrategy implements IPdfExportStrategy {
       if (overlayElement?.parentNode) {
         document.body.removeChild(overlayElement)
         overlayElement = null
+      }
+      if (tempPreviewElement) {
+        cleanupPreviewElement(tempPreviewElement)
+        tempPreviewElement = null
       }
 
       // PDFを生成
@@ -117,6 +138,9 @@ export class OverlayPdfExportStrategy implements IPdfExportStrategy {
       }
       if (overlayElement?.parentNode) {
         document.body.removeChild(overlayElement)
+      }
+      if (tempPreviewElement) {
+        cleanupPreviewElement(tempPreviewElement)
       }
 
       return {

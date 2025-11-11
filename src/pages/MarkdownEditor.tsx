@@ -314,11 +314,6 @@ export function MarkdownEditor() {
 
   // PDF出力
   const handleExportPDF = async () => {
-    if (!previewRef.current) {
-      showToast('プレビューが表示されていません', TOAST_DURATIONS.ERROR)
-      return
-    }
-    
     if (!markdown.trim()) {
       showToast('出力する内容がありません', TOAST_DURATIONS.ERROR)
       return
@@ -334,9 +329,10 @@ export function MarkdownEditor() {
       }
 
       // PDF出力を実行
+      // previewRef.currentがnullでも各ストラテジーで対応する
       const result = await strategy.export({
         markdown,
-        previewElement: previewRef.current,
+        previewElement: previewRef.current as HTMLElement,
         colorMode,
         isMobile: isMobile || false,
         onProgress: (message) => showToast(message, TOAST_DURATIONS.SHORT)
