@@ -97,7 +97,12 @@ async function renderMermaidDiagrams(container: HTMLElement, colorMode: 'light' 
     try {
       const uniqueId = `mermaid-temp-${Math.random().toString(36).substr(2, 9)}-${Date.now()}-${i}`
       const { svg } = await mermaid.render(uniqueId, code)
-      div.innerHTML = svg
+      // Sanitize SVG before inserting into DOM
+      const sanitizedSvg = DOMPurify.sanitize(svg, { 
+        ADD_TAGS: ['svg', 'g', 'path', 'text', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'tspan', 'marker', 'defs', 'style', 'clipPath', 'foreignObject'],
+        ADD_ATTR: ['viewBox', 'xmlns', 'width', 'height', 'x', 'y', 'cx', 'cy', 'r', 'rx', 'ry', 'd', 'fill', 'stroke', 'stroke-width', 'transform', 'class', 'id', 'style', 'points', 'x1', 'y1', 'x2', 'y2', 'text-anchor', 'dominant-baseline', 'font-family', 'font-size', 'font-weight', 'markerWidth', 'markerHeight', 'refX', 'refY', 'orient', 'clip-path', 'filter']
+      })
+      div.innerHTML = sanitizedSvg
       div.classList.add('mermaid-rendered')
     } catch (error) {
       console.error('Mermaid render error:', error)
