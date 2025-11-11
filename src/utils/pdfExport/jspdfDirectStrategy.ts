@@ -66,7 +66,7 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
           currentY = margin
         }
 
-        currentY = await this.renderElement(pdf, element, margin, currentY, contentWidth, pageHeight)
+        currentY = await this.renderElement(pdf, element, margin, currentY, contentWidth)
       }
 
       pdf.save('document.pdf')
@@ -222,8 +222,7 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
     element: PdfElement,
     margin: number,
     currentY: number,
-    contentWidth: number,
-    _pageHeight: number
+    contentWidth: number
   ): Promise<number> {
     let y = currentY
 
