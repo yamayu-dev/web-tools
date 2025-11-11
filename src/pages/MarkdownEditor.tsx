@@ -11,8 +11,6 @@ import {
 } from '@chakra-ui/react'
 import { marked } from 'marked'
 import mermaid from 'mermaid'
-import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
 import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
@@ -22,12 +20,14 @@ import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
+import { pdfExportManager, PDF_EXPORT_METHODS, type PdfExportMethod } from '../utils/pdfExport'
 
 // Mermaid will be initialized dynamically based on color mode
 
 export function MarkdownEditor() {
   const [markdown, setMarkdown] = useState<string>('')
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split')
+  const [pdfExportMethod, setPdfExportMethod] = useState<PdfExportMethod>('overlay')
   const previewRef = useRef<HTMLDivElement>(null)
   const lastProcessedHTMLRef = useRef<string>('') // Track last processed HTML
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -323,234 +323,33 @@ export function MarkdownEditor() {
       showToast('出力する内容がありません', TOAST_DURATIONS.ERROR)
       return
     }
-    
-    let clonedElement: HTMLElement | null = null
-    let overlayElement: HTMLElement | null = null
-    
+
     try {
-      showToast('PDF生成中...', TOAST_DURATIONS.SHORT)
+      // 選択されたストラテジーを取得
+      const strategy = pdfExportManager.getStrategy(pdfExportMethod)
       
-      const previewElement = previewRef.current
-      
-      // 画面を一時的に覆うオーバーレイを作成（ユーザーに変化を見せない）
-      overlayElement = document.createElement('div')
-      overlayElement.style.position = 'fixed'
-      overlayElement.style.top = '0'
-      overlayElement.style.left = '0'
-      overlayElement.style.width = '100vw'
-      overlayElement.style.height = '100vh'
-      overlayElement.style.backgroundColor = colorMode === 'dark' ? '#0d1117' : '#ffffff'
-      overlayElement.style.zIndex = '9999'
-      overlayElement.style.display = 'flex'
-      overlayElement.style.alignItems = 'center'
-      overlayElement.style.justifyContent = 'center'
-      overlayElement.style.color = colorMode === 'dark' ? '#e6edf3' : '#24292f'
-      overlayElement.style.fontSize = '18px'
-      overlayElement.style.fontWeight = 'bold'
-      overlayElement.textContent = 'PDF生成中...'
-      document.body.appendChild(overlayElement)
-      
-      // 少し待ってからPDF生成を開始（オーバーレイが表示されるのを待つ）
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // プレビュー要素の完全なクローンを作成
-      clonedElement = previewElement.cloneNode(true) as HTMLElement
-      
-      // クローンを一時的にbodyに追加（on-screen、html2canvasが正しくレンダリングできる位置）
-      clonedElement.style.position = 'fixed'
-      clonedElement.style.left = '0'
-      clonedElement.style.top = '0'
-      clonedElement.style.zIndex = '10000' // オーバーレイより上に配置
-      clonedElement.style.pointerEvents = 'none'
-      
-      // モバイルの場合、クローンの幅を設定
-      if (isMobile) {
-        clonedElement.style.width = '800px'
-        clonedElement.style.maxWidth = '800px'
+      if (!strategy) {
+        showToast('選択されたPDF出力方法が見つかりません', TOAST_DURATIONS.ERROR)
+        return
       }
-      
-      document.body.appendChild(clonedElement)
-      
-      // クローンにライトモードのスタイルを適用（PDFは常にライトモード）
-      clonedElement.style.backgroundColor = '#ffffff'
-      clonedElement.style.color = '#24292f'
-      
-      // すべてのテキスト要素にライトモードの色を適用
-      const allElements = clonedElement.querySelectorAll('*')
-      allElements.forEach((el) => {
-        const element = el as HTMLElement
-        // テキスト色をライトモードに
-        if (window.getComputedStyle(element).color.includes('255, 255, 255') || 
-            window.getComputedStyle(element).color.includes('230, 237, 243')) {
-          element.style.color = '#24292f'
-        }
+
+      // PDF出力を実行
+      const result = await strategy.export({
+        markdown,
+        previewElement: previewRef.current,
+        colorMode,
+        isMobile: isMobile || false,
+        onProgress: (message) => showToast(message, TOAST_DURATIONS.SHORT)
       })
-      
-      // 見出しの色を設定
-      const headings = clonedElement.querySelectorAll('h1, h2, h3, h4, h5, h6')
-      headings.forEach((heading) => {
-        const element = heading as HTMLElement
-        element.style.color = '#24292f'
-      })
-      
-      // 段落の色を設定
-      const paragraphs = clonedElement.querySelectorAll('p')
-      paragraphs.forEach((p) => {
-        const element = p as HTMLElement
-        element.style.color = '#24292f'
-      })
-      
-      // リストアイテムの色を設定
-      const listItems = clonedElement.querySelectorAll('li')
-      listItems.forEach((li) => {
-        const element = li as HTMLElement
-        element.style.color = '#24292f'
-      })
-      
-      // コードブロックのスタイルを変更
-      const codeBlocks = clonedElement.querySelectorAll('pre')
-      codeBlocks.forEach((pre) => {
-        const element = pre as HTMLElement
-        element.style.backgroundColor = '#f6f8fa'
-        element.style.borderColor = '#d0d7de'
-        
-        const code = pre.querySelector('code')
-        if (code) {
-          const codeEl = code as HTMLElement
-          codeEl.style.color = '#24292f'
-          
-          // highlight.jsのクラスを持つ要素の色を変更
-          const highlightedElements = codeEl.querySelectorAll('[class*="hljs"]')
-          highlightedElements.forEach((hlEl) => {
-            const hlElement = hlEl as HTMLElement
-            // ダークモード特有の色をライトモードに変換
-            const computedColor = window.getComputedStyle(hlElement).color
-            if (computedColor.includes('230, 237, 243')) { // #e6edf3
-              hlElement.style.color = '#24292f'
-            } else if (computedColor.includes('139, 148, 158')) { // #8b949e (comment)
-              hlElement.style.color = '#6a737d'
-            } else if (computedColor.includes('255, 123, 114')) { // #ff7b72 (keyword)
-              hlElement.style.color = '#d73a49'
-            } else if (computedColor.includes('121, 192, 255')) { // #79c0ff (number/variable)
-              hlElement.style.color = '#005cc5'
-            } else if (computedColor.includes('165, 214, 255')) { // #a5d6ff (string)
-              hlElement.style.color = '#032f62'
-            } else if (computedColor.includes('210, 168, 255')) { // #d2a8ff (title)
-              hlElement.style.color = '#6f42c1'
-            } else if (computedColor.includes('255, 166, 87')) { // #ffa657 (built_in)
-              hlElement.style.color = '#e36209'
-            } else if (computedColor.includes('126, 231, 135')) { // #7ee787 (name/tag)
-              hlElement.style.color = '#22863a'
-            }
-          })
-        }
-      })
-      
-      // インラインコードのスタイルを変更
-      const inlineCodes = clonedElement.querySelectorAll('code')
-      inlineCodes.forEach((code) => {
-        const element = code as HTMLElement
-        // <pre>内の<code>は既に処理済みなので、親が<pre>でない場合のみ処理
-        if (element.parentElement?.tagName !== 'PRE') {
-          element.style.backgroundColor = 'rgba(175, 184, 193, 0.2)'
-          element.style.color = '#24292f'
-        }
-      })
-      
-      // blockquoteの色を設定
-      const blockquotes = clonedElement.querySelectorAll('blockquote')
-      blockquotes.forEach((bq) => {
-        const element = bq as HTMLElement
-        element.style.color = '#57606a'
-        element.style.borderLeftColor = '#d0d7de'
-      })
-      
-      // テーブルのスタイルを設定
-      const tables = clonedElement.querySelectorAll('table')
-      tables.forEach((table) => {
-        const element = table as HTMLElement
-        element.style.color = '#24292f'
-        
-        const ths = table.querySelectorAll('th')
-        ths.forEach((th) => {
-          const thEl = th as HTMLElement
-          thEl.style.backgroundColor = '#f6f8fa'
-          thEl.style.borderColor = '#d0d7de'
-          thEl.style.color = '#24292f'
-        })
-        
-        const tds = table.querySelectorAll('td')
-        tds.forEach((td) => {
-          const tdEl = td as HTMLElement
-          tdEl.style.borderColor = '#d0d7de'
-          tdEl.style.color = '#24292f'
-        })
-      })
-      
-      // 少し待ってからhtml2canvasを実行（スタイルが適用されるのを待つ）
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // クローンをキャンバスに変換
-      const canvas = await html2canvas(clonedElement, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        windowWidth: isMobile ? 800 : undefined,
-        width: isMobile ? 800 : undefined,
-        backgroundColor: '#ffffff'
-      })
-      
-      // クローンとオーバーレイを削除
-      if (clonedElement && clonedElement.parentNode) {
-        document.body.removeChild(clonedElement)
-        clonedElement = null
+
+      if (result.success) {
+        showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
+      } else {
+        showToast(result.error || 'PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
       }
-      if (overlayElement && overlayElement.parentNode) {
-        document.body.removeChild(overlayElement)
-        overlayElement = null
-      }
-      
-      const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      })
-      
-      const pdfWidth = 210 // A4 width in mm
-      const pdfHeight = 297 // A4 height in mm
-      const margin = 10 // マージン
-      const contentWidth = pdfWidth - (margin * 2)
-      const imgWidth = contentWidth
-      const imgHeight = (canvas.height * contentWidth) / canvas.width
-      let heightLeft = imgHeight
-      let position = margin
-      
-      // 最初のページ
-      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-      heightLeft -= (pdfHeight - margin * 2)
-      
-      // 複数ページの場合
-      while (heightLeft > 0) {
-        position = -(imgHeight - heightLeft) + margin
-        pdf.addPage()
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-        heightLeft -= (pdfHeight - margin * 2)
-      }
-      
-      pdf.save('document.pdf')
-      showToast('PDFを出力しました', TOAST_DURATIONS.SHORT)
     } catch (error) {
       console.error('PDF export error:', error)
       showToast('PDF出力に失敗しました', TOAST_DURATIONS.ERROR)
-      
-      // エラー時もクローンとオーバーレイを確実に削除
-      if (clonedElement && clonedElement.parentNode) {
-        document.body.removeChild(clonedElement)
-      }
-      if (overlayElement && overlayElement.parentNode) {
-        document.body.removeChild(overlayElement)
-      }
     }
   }
 
@@ -653,7 +452,34 @@ export function MarkdownEditor() {
           </Box>
 
           {/* ファイル操作 */}
-          <Flex gap={2} flexWrap="wrap">
+          <Flex gap={2} flexWrap="wrap" alignItems="flex-end">
+            {/* PDF出力方法選択 */}
+            <Box>
+              <Text fontSize="xs" fontWeight="medium" mb={1} color={colorStyles.text.primary}>
+                PDF出力方法
+              </Text>
+              <select
+                value={pdfExportMethod}
+                onChange={(e) => setPdfExportMethod(e.target.value as PdfExportMethod)}
+                style={{
+                  fontSize: '14px',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  backgroundColor: colorStyles.bg.primary,
+                  color: colorStyles.text.primary,
+                  border: `1px solid ${colorStyles.border.default}`,
+                  cursor: 'pointer',
+                  width: '200px',
+                  height: '32px'
+                }}>
+                {(Object.keys(PDF_EXPORT_METHODS) as PdfExportMethod[]).map((method) => (
+                  <option key={method} value={method}>
+                    {PDF_EXPORT_METHODS[method].label}
+                  </option>
+                ))}
+              </select>
+            </Box>
+
             <input
               ref={fileInputRef}
               type="file"
