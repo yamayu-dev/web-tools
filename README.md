@@ -178,3 +178,31 @@ sudo /usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate
 - `vite.config.ts` の `base: '/web-tools/'` 設定を確認
 - `scripts/copy-404.js` が実行されているか確認（SPAの404対応）
 - GitHub Actions ワークフローが正常に実行されているか Actions タブで確認
+
+## 機能詳細
+
+### MarkdownエディタのPDFエクスポート
+
+PC・Mobile共通で安定したPDF出力を提供します。
+
+#### PDF出力方式
+
+1. **オフスクリーン方式（推奨・デフォルト）**
+   - PC・Mobile共通で同じ内容のPDFを出力
+   - プレビュー相当の文字サイズ・レイアウト
+   - 適切な余白（15mm）とページ分割
+   - テーブル・コードブロック・Mermaid図に対応
+   - ページの重なりなし
+
+2. **jsPDF直接描画方式（試験的）**
+   - Markdownから直接PDFを生成
+   - テーブルヘッダーの背景色を正しく表示
+   - Mermaid図をSVGから画像変換して埋め込み
+   - 軽量で高速（Canvasレンダリング不要）
+
+#### 推奨設定
+- **出力方式**: オフスクリーン方式
+- **文字サイズ**: プレビュー相当（自動設定）
+- **余白**: 15mm（A4用紙に最適）
+- **対象幅**: 800px（PC・Mobile共通）
+````

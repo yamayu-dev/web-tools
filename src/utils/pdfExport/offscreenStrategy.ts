@@ -6,63 +6,56 @@
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
 import type { IPdfExportStrategy, PdfExportOptions, PdfExportResult } from './types'
-import { createPreviewElement, cleanupPreviewElement } from './previewHelper'
 
 export class OffscreenPdfExportStrategy implements IPdfExportStrategy {
   name = 'offscreen'
   description = 'オフスクリーン方式'
 
   async export(options: PdfExportOptions): Promise<PdfExportResult> {
-    const { markdown, previewElement, isMobile, onProgress } = options
+    const { previewElement, onProgress } = options
 
     let clonedElement: HTMLElement | null = null
-    let tempPreviewElement: HTMLElement | null = null
 
     try {
       onProgress?.('PDF生成中（オフスクリーン）...')
+      
+      if (!previewElement) {
+        throw new Error('プレビュー要素が見つかりません。プレビュータブを表示してから再度お試しください。')
+      }
 
-      // プレビュー要素が存在しない場合は一時的に作成
-      let sourceElement = previewElement
-      if (!sourceElement || !sourceElement.parentNode) {
-        tempPreviewElement = await createPreviewElement(markdown, 'light')
-        sourceElement = tempPreviewElement
+      if (!previewElement.innerHTML || previewElement.innerHTML.length === 0) {
+        throw new Error('プレビューが空です。プレビュータブでコンテンツを確認してから再度お試しください。')
       }
 
       // プレビュー要素のクローンを作成
-      clonedElement = sourceElement.cloneNode(true) as HTMLElement
+      clonedElement = previewElement.cloneNode(true) as HTMLElement
       
-      // 画面外に配置し、完全に非表示にする
-      clonedElement.style.position = 'absolute' // fixed から absolute に変更
-      clonedElement.style.left = '-9999px'
+      // 画面外に配置
+      clonedElement.style.position = 'fixed'
+      clonedElement.style.left = '-10000px'
       clonedElement.style.top = '0'
-      clonedElement.style.visibility = 'visible' // visible に設定（html2canvas用）
-      clonedElement.style.opacity = '1' // opacity を 1 に設定
       clonedElement.style.pointerEvents = 'none'
-      clonedElement.style.zIndex = '-1'
-
-      if (isMobile) {
-        clonedElement.style.width = '800px'
-        clonedElement.style.maxWidth = '800px'
-      }
+      clonedElement.style.zIndex = '-9999'
+      clonedElement.style.backgroundColor = '#ffffff'
+      clonedElement.style.width = '800px'
+      clonedElement.style.maxWidth = '800px'
 
       document.body.appendChild(clonedElement)
 
       // ライトモードのスタイルを適用
       this.applyLightModeStyles(clonedElement)
 
-      await new Promise(resolve => setTimeout(resolve, 200)) // 待機時間を増やす
+      // スタイル適用とレンダリングを待つ
+      await new Promise(resolve => setTimeout(resolve, 500))
 
       // html2canvasでキャンバスに変換
       const canvas = await html2canvas(clonedElement, {
-        scale: 2,
+        scale: 4,
         useCORS: true,
         logging: false,
-        windowWidth: isMobile ? 800 : undefined,
-        width: isMobile ? 800 : undefined,
-        backgroundColor: '#ffffff',
-        // オフスクリーン要素のレンダリング用オプション
-        foreignObjectRendering: false,
-        allowTaint: false
+        windowWidth: 800,
+        width: 800,
+        backgroundColor: '#ffffff'
       })
 
       // クリーンアップ
@@ -70,13 +63,10 @@ export class OffscreenPdfExportStrategy implements IPdfExportStrategy {
         document.body.removeChild(clonedElement)
         clonedElement = null
       }
-      if (tempPreviewElement) {
-        cleanupPreviewElement(tempPreviewElement)
-        tempPreviewElement = null
-      }
 
       // PDFを生成
       const imgData = canvas.toDataURL('image/png')
+      
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -89,17 +79,26 @@ export class OffscreenPdfExportStrategy implements IPdfExportStrategy {
       const contentWidth = pdfWidth - (margin * 2)
       const imgWidth = contentWidth
       const imgHeight = (canvas.height * contentWidth) / canvas.width
-      let heightLeft = imgHeight
-      let position = margin
+      
+      // 1ページ目を追加
+      pdf.addImage(imgData, 'PNG', margin, margin, imgWidth, imgHeight)
+      
+      // 残りの高さを計算
+      let remainingHeight = imgHeight - (pdfHeight - margin * 2)
+      let pageNumber = 1
 
-      pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-      heightLeft -= (pdfHeight - margin * 2)
-
-      while (heightLeft > 0) {
-        position = -(imgHeight - heightLeft) + margin
+      // 2ページ目以降
+      while (remainingHeight > 0) {
         pdf.addPage()
-        pdf.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight)
-        heightLeft -= (pdfHeight - margin * 2)
+        pageNumber++
+        
+        // このページに表示する画像の開始位置（元の画像からの切り出し位置）
+        const sourceY = (pageNumber - 1) * (pdfHeight - margin * 2)
+        const yOffset = -sourceY
+        
+        pdf.addImage(imgData, 'PNG', margin, yOffset + margin, imgWidth, imgHeight)
+        
+        remainingHeight -= (pdfHeight - margin * 2)
       }
 
       pdf.save('document.pdf')
@@ -109,9 +108,6 @@ export class OffscreenPdfExportStrategy implements IPdfExportStrategy {
       // クリーンアップ
       if (clonedElement?.parentNode) {
         document.body.removeChild(clonedElement)
-      }
-      if (tempPreviewElement) {
-        cleanupPreviewElement(tempPreviewElement)
       }
 
       return {

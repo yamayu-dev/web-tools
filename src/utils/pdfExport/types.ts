@@ -3,7 +3,7 @@
  * 各PDF出力方法の共通インターフェースと型定義
  */
 
-export type PdfExportMethod = 'overlay' | 'offscreen' | 'jspdf-direct'
+export type PdfExportMethod = 'offscreen' | 'jspdf-direct'
 
 export interface PdfExportOptions {
   markdown: string
@@ -25,16 +25,12 @@ export interface IPdfExportStrategy {
 }
 
 export const PDF_EXPORT_METHODS: Record<PdfExportMethod, { label: string; description: string }> = {
-  'overlay': {
-    label: 'オーバーレイ方式',
-    description: '現在の実装。画面にオーバーレイを表示して変化を隠す'
-  },
   'offscreen': {
-    label: 'オフスクリーン方式',
-    description: '画面外でレンダリングして出力'
+    label: 'オフスクリーン方式（推奨）',
+    description: 'PC・Mobile共通で安定した出力。プレビュー相当のPDFを生成'
   },
   'jspdf-direct': {
     label: 'jsPDF直接描画',
-    description: 'Markdownから直接PDFを生成（Mermaid・テーブル対応）'
+    description: 'Markdownから直接PDFを生成。テーブル・Mermaid対応（試験的）'
   }
 }

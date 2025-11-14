@@ -36,6 +36,13 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
     const { markdown, onProgress } = options
 
     try {
+      // Mermaid初期化
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'loose'
+      })
+
       onProgress?.('Markdownを解析中...')
 
       // Markdownをパース
@@ -102,13 +109,15 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
             // Mermaid図として処理
             try {
               const svg = await this.renderMermaidToSvg(codeContent.join('\n'))
+              console.log('Mermaid SVG rendered successfully, length:', svg.length)
               elements.push({
                 type: 'mermaid',
                 code: codeContent.join('\n'),
                 svg
               })
-            } catch {
+            } catch (error) {
               // Mermaidレンダリング失敗時はコードとして表示
+              console.error('Mermaid rendering failed:', error)
               elements.push({
                 type: 'code',
                 content: codeContent.join('\n'),
@@ -241,20 +250,54 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
     } else if (element.type === 'code') {
       pdf.setFontSize(9)
       pdf.setFont('courier')
-      pdf.setTextColor(50, 50, 50)
-      pdf.setFillColor(246, 248, 250)
+      pdf.setFillColor(246, 248, 250) // #f6f8fa GitHub風の背景色
+      pdf.setDrawColor(208, 215, 222) // #d0d7de 枠線色
       
       const lines = element.content.split('\n')
       const lineHeight = 4
       const padding = 3
       const boxHeight = lines.length * lineHeight + padding * 2
 
-      // 背景ボックス
-      pdf.rect(margin, y - padding, contentWidth, boxHeight, 'F')
+      // 背景ボックスと枠線
+      pdf.rect(margin, y - padding, contentWidth, boxHeight, 'FD')
+      
+      // C#のキーワード（基本的なもののみ）
+      const keywords = ['public', 'private', 'protected', 'internal', 'static', 'void', 'string', 'int', 'bool', 'var', 'class', 'return', 'if', 'else', 'for', 'while', 'new', 'this']
       
       lines.forEach((line, idx) => {
-        const displayLine = line.substring(0, 100) // 長すぎる行を切り詰め
-        pdf.text(displayLine, margin + 2, y + idx * lineHeight + 2)
+        const yPos = y + idx * lineHeight + 2
+        let xPos = margin + 2
+        
+        // 簡易的なトークン分割（スペースと記号で分割）
+        const tokens = line.split(/(\s+|[(){};,=])/)
+        
+        tokens.forEach(token => {
+          if (!token) return
+          
+          // キーワードの場合は青色
+          if (keywords.includes(token)) {
+            pdf.setTextColor(0, 92, 197) // #005cc5 キーワード色
+          }
+          // 文字列リテラルの場合（簡易判定）
+          else if (token.startsWith('"') || token.startsWith("'")) {
+            pdf.setTextColor(3, 47, 98) // #032f62 文字列色
+          }
+          // 数字の場合
+          else if (/^\d+$/.test(token)) {
+            pdf.setTextColor(0, 92, 197) // #005cc5 数字色
+          }
+          // コメントの場合
+          else if (token.startsWith('//') || token.startsWith('/*')) {
+            pdf.setTextColor(106, 115, 125) // #6a737d コメント色
+          }
+          // 通常のテキスト
+          else {
+            pdf.setTextColor(36, 41, 46) // #24292e 通常の文字色
+          }
+          
+          pdf.text(token, xPos, yPos)
+          xPos += pdf.getTextWidth(token)
+        })
       })
 
       y += boxHeight + 5
@@ -275,13 +318,112 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
     } else if (element.type === 'table') {
       y = this.renderTable(pdf, element, margin, y, contentWidth)
     } else if (element.type === 'mermaid' && element.svg) {
-      // Mermaid図をレンダリング
-      // SVGを画像として埋め込む（簡易実装）
-      pdf.setFontSize(10)
-      pdf.setTextColor(100, 100, 100)
-      pdf.text('[Mermaid Diagram]', margin, y)
-      y += 10
-      pdf.setTextColor(0, 0, 0)
+      // Mermaid図をSVGから画像に変換して埋め込む
+      try {
+        console.log('Processing Mermaid diagram, SVG length:', element.svg.length)
+        
+        // SVGのサイズを取得
+        const parser = new DOMParser()
+        const svgDoc = parser.parseFromString(element.svg, 'image/svg+xml')
+        const svgElement = svgDoc.querySelector('svg')
+        
+        if (!svgElement) {
+          throw new Error('SVG element not found')
+        }
+
+        // SVGのviewBox属性からサイズを取得
+        const viewBox = svgElement.getAttribute('viewBox')
+        let svgWidth = 800
+        let svgHeight = 600
+        
+        if (viewBox) {
+          const [, , w, h] = viewBox.split(' ').map(Number)
+          svgWidth = w
+          svgHeight = h
+        } else {
+          svgWidth = parseFloat(svgElement.getAttribute('width') || '800')
+          svgHeight = parseFloat(svgElement.getAttribute('height') || '600')
+        }
+
+        console.log('Mermaid SVG dimensions:', { svgWidth, svgHeight })
+
+        // 明示的にサイズを設定
+        svgElement.setAttribute('width', String(svgWidth))
+        svgElement.setAttribute('height', String(svgHeight))
+        
+        // SVGをData URLに変換
+        const svgString = new XMLSerializer().serializeToString(svgElement)
+        const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString)
+        
+        // 一時的なimgタグでSVGを読み込み、Canvasに描画
+        const img = new Image()
+        
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Mermaid image loading timeout'))
+          }, 5000) // 5秒タイムアウト
+          
+          img.onload = () => {
+            clearTimeout(timeout)
+            console.log('Mermaid image loaded successfully')
+            resolve()
+          }
+          img.onerror = (e) => {
+            clearTimeout(timeout)
+            console.error('Mermaid image loading error:', e)
+            reject(new Error('Mermaid image loading error'))
+          }
+          img.src = svgDataUrl
+        })
+        
+        // Canvasに描画（高解像度で描画）
+        const scale = 3 // 解像度を上げる（2→3）
+        const canvas = document.createElement('canvas')
+        canvas.width = svgWidth * scale
+        canvas.height = svgHeight * scale
+        const ctx = canvas.getContext('2d')!
+        ctx.scale(scale, scale)
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, svgWidth, svgHeight)
+        ctx.drawImage(img, 0, 0, svgWidth, svgHeight)
+        
+        // PDFに追加（サイズを適切にスケーリング）
+        const imgData = canvas.toDataURL('image/png')
+        
+        // 最大幅をcontentWidthに、最大高さを150mmに制限
+        const maxHeight = 150 // mm
+        let pdfImgWidth = contentWidth
+        let pdfImgHeight = (svgHeight * contentWidth) / svgWidth
+        
+        // 高さが大きすぎる場合は縮小
+        if (pdfImgHeight > maxHeight) {
+          pdfImgHeight = maxHeight
+          pdfImgWidth = (svgWidth * maxHeight) / svgHeight
+        }
+        
+        console.log('Mermaid PDF dimensions (scaled, high-res):', { pdfImgWidth, pdfImgHeight, canvasScale: scale })
+        
+        // ページに収まるかチェック
+        const pageHeight = 297
+        const availableHeight = pageHeight - y - margin
+        
+        if (pdfImgHeight > availableHeight) {
+          pdf.addPage()
+          y = margin
+        }
+        
+        pdf.addImage(imgData, 'PNG', margin, y, pdfImgWidth, pdfImgHeight)
+        y += pdfImgHeight + 5
+        
+      } catch (error) {
+        // 失敗時はプレースホルダー表示
+        console.error('Mermaid rendering error:', error)
+        pdf.setFontSize(10)
+        pdf.setTextColor(100, 100, 100)
+        pdf.text('[Mermaid図: レンダリングエラー]', margin, y)
+        y += 10
+        pdf.setTextColor(0, 0, 0)
+      }
     }
 
     return y
@@ -298,26 +440,32 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
     const colWidth = contentWidth / table.headers.length
     const rowHeight = 7
 
-    // ヘッダー
-    pdf.setFillColor(246, 248, 250)
+    // ヘッダー行（GitHub風の濃いグレー背景）
     pdf.setFont('helvetica', 'bold')
     pdf.setFontSize(10)
 
     table.headers.forEach((header, idx) => {
       const x = margin + idx * colWidth
-      pdf.rect(x, y, colWidth, rowHeight, 'FD')
+      // 各セルごとに色を明示的に設定
+      pdf.setFillColor(233, 236, 239) // #e9ecef 背景色
+      pdf.setDrawColor(208, 215, 222) // #d0d7de 枠線色
+      pdf.setTextColor(36, 41, 46) // #24292e 文字色
+      pdf.rect(x, y, colWidth, rowHeight, 'FD') // FD = Fill and Draw
       pdf.text(header.substring(0, 20), x + 2, y + 5)
     })
     y += rowHeight
 
-    // 行
+    // データ行（白背景）
     pdf.setFont('helvetica', 'normal')
-    pdf.setFillColor(255, 255, 255)
 
     table.rows.forEach(row => {
       row.forEach((cell, idx) => {
         const x = margin + idx * colWidth
-        pdf.rect(x, y, colWidth, rowHeight, 'D')
+        // 各セルごとに色を明示的に設定（ヘッダーと同じように）
+        pdf.setFillColor(255, 255, 255) // 白背景
+        pdf.setDrawColor(208, 215, 222) // 枠線色
+        pdf.setTextColor(36, 41, 46) // 文字色（黒）
+        pdf.rect(x, y, colWidth, rowHeight, 'FD') // FD = Fill and Draw (白で塗りつぶし)
         pdf.text(cell.substring(0, 20), x + 2, y + 5)
       })
       y += rowHeight

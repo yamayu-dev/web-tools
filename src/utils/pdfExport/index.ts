@@ -5,6 +5,9 @@
 
 export * from './types'
 export * from './manager'
-export { OverlayPdfExportStrategy } from './overlayStrategy'
 export { OffscreenPdfExportStrategy } from './offscreenStrategy'
 export { JspdfDirectStrategy } from './jspdfDirectStrategy'
+
+// デフォルトのマネージャーインスタンスをエクスポート
+import { PdfExportStrategyManager } from './manager'
+export const pdfExportManager = new PdfExportStrategyManager()

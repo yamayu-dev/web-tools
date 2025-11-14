@@ -4,7 +4,6 @@
  */
 
 import type { IPdfExportStrategy, PdfExportMethod } from './types'
-import { OverlayPdfExportStrategy } from './overlayStrategy'
 import { OffscreenPdfExportStrategy } from './offscreenStrategy'
 import { JspdfDirectStrategy } from './jspdfDirectStrategy'
 
@@ -12,8 +11,7 @@ export class PdfExportStrategyManager {
   private strategies: Map<PdfExportMethod, IPdfExportStrategy> = new Map()
 
   constructor() {
-    // すべてのストラテジーを登録
-    this.strategies.set('overlay', new OverlayPdfExportStrategy())
+    // 推奨ストラテジーを登録（オーバーレイ方式は削除）
     this.strategies.set('offscreen', new OffscreenPdfExportStrategy())
     this.strategies.set('jspdf-direct', new JspdfDirectStrategy())
   }

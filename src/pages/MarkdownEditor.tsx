@@ -27,7 +27,7 @@ import { pdfExportManager, PDF_EXPORT_METHODS, type PdfExportMethod } from '../u
 export function MarkdownEditor() {
   const [markdown, setMarkdown] = useState<string>('')
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split')
-  const [pdfExportMethod, setPdfExportMethod] = useState<PdfExportMethod>('overlay')
+  const [pdfExportMethod, setPdfExportMethod] = useState<PdfExportMethod>('offscreen')
   const previewRef = useRef<HTMLDivElement>(null)
   const lastProcessedHTMLRef = useRef<string>('') // Track last processed HTML
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -43,8 +43,8 @@ export function MarkdownEditor() {
     const loadHighlightTheme = () => {
       // カスタムクラス名でスタイル要素を識別
       const styles = document.querySelectorAll('style')
-      let lightStyle: HTMLStyleElement | null = null
-      let darkStyle: HTMLStyleElement | null = null
+      let lightStyle: HTMLStyleElement | undefined
+      let darkStyle: HTMLStyleElement | undefined
       
       // highlight.jsのスタイルを特定
       styles.forEach(style => {
@@ -53,25 +53,25 @@ export function MarkdownEditor() {
           if (style.textContent.includes('.hljs') && !style.id) {
             if (style.textContent.includes('color:#24292e') || style.textContent.includes('color:#24292f')) {
               style.id = 'hljs-light-theme'
-              lightStyle = style
+              lightStyle = style as HTMLStyleElement
             } else if (style.textContent.includes('color:#e6edf3') || style.textContent.includes('color:#c9d1d9')) {
               style.id = 'hljs-dark-theme'
-              darkStyle = style
+              darkStyle = style as HTMLStyleElement
             }
           } else if (style.id === 'hljs-light-theme') {
-            lightStyle = style
+            lightStyle = style as HTMLStyleElement
           } else if (style.id === 'hljs-dark-theme') {
-            darkStyle = style
+            darkStyle = style as HTMLStyleElement
           }
         }
       })
       
       // テーマに応じて有効/無効を切り替え
       if (lightStyle) {
-        lightStyle.disabled = colorMode === 'dark'
+        (lightStyle as HTMLStyleElement).disabled = colorMode === 'dark'
       }
       if (darkStyle) {
-        darkStyle.disabled = colorMode === 'light'
+        (darkStyle as HTMLStyleElement).disabled = colorMode === 'light'
       }
     }
     
@@ -319,6 +319,12 @@ export function MarkdownEditor() {
       return
     }
 
+    // プレビューが表示されていない場合の警告
+    if (viewMode === 'edit') {
+      showToast('プレビュータブまたは分割モードに切り替えてからPDFを出力してください', TOAST_DURATIONS.ERROR)
+      return
+    }
+
     try {
       // 選択されたストラテジーを取得
       const strategy = pdfExportManager.getStrategy(pdfExportMethod)
@@ -329,7 +335,6 @@ export function MarkdownEditor() {
       }
 
       // PDF出力を実行
-      // previewRef.currentがnullでも各ストラテジーで対応する
       const result = await strategy.export({
         markdown,
         previewElement: previewRef.current as HTMLElement,
@@ -487,7 +492,6 @@ export function MarkdownEditor() {
             <Button 
               onClick={handleLoad}
               size="sm"
-              leftIcon={<Upload size={16} />}
               bg={colorStyles.bg.primary}
               color={colorStyles.text.primary}
               borderColor={colorStyles.border.default}
@@ -496,12 +500,12 @@ export function MarkdownEditor() {
               _hover={{
                 bg: colorStyles.bg.secondary
               }}>
+              <Upload size={16} style={{ marginRight: '8px' }} />
               読み込み
             </Button>
             <Button 
               onClick={handleSave}
               size="sm"
-              leftIcon={<Download size={16} />}
               bg={colorStyles.bg.primary}
               color={colorStyles.text.primary}
               borderColor={colorStyles.border.default}
@@ -510,12 +514,12 @@ export function MarkdownEditor() {
               _hover={{
                 bg: colorStyles.bg.secondary
               }}>
+              <Download size={16} style={{ marginRight: '8px' }} />
               保存
             </Button>
             <Button 
               onClick={handleExportPDF}
               size="sm"
-              leftIcon={<FileText size={16} />}
               colorScheme="blue"
               bg={colorStyles.accent.blue.button}
               color="white"
@@ -523,6 +527,7 @@ export function MarkdownEditor() {
               _hover={{
                 bg: colorStyles.accent.blue.buttonHover
               }}>
+              <FileText size={16} style={{ marginRight: '8px' }} />
               PDF出力
             </Button>
           </Flex>
@@ -731,16 +736,27 @@ export function MarkdownEditor() {
                   width: '100%',
                   marginTop: '1em',
                   marginBottom: '1em',
-                  textAlign: 'left !important'
+                  textAlign: 'left !important',
+                  border: colorMode === 'dark' ? '1px solid #30363d !important' : '1px solid #d0d7de !important'
                 },
                 '& th, & td': {
-                  border: `1px solid ${colorStyles.border.default}`,
-                  padding: '0.5em',
+                  border: colorMode === 'dark' ? '1px solid #30363d !important' : '1px solid #d0d7de !important',
+                  padding: '0.5em 0.75em',
                   textAlign: 'left !important'
                 },
+                '& thead': {
+                  backgroundColor: `${colorMode === 'dark' ? '#161b22' : '#f6f8fa'} !important`
+                },
                 '& th': {
-                  backgroundColor: colorStyles.bg.secondary,
-                  fontWeight: 'bold'
+                  backgroundColor: `${colorMode === 'dark' ? '#161b22' : '#f6f8fa'} !important`,
+                  fontWeight: 'bold',
+                  color: colorStyles.text.primary
+                },
+                '& tbody tr': {
+                  backgroundColor: `${colorMode === 'dark' ? '#0d1117' : '#ffffff'} !important`
+                },
+                '& tbody tr:hover': {
+                  backgroundColor: `${colorMode === 'dark' ? '#161b22' : '#f6f8fa'} !important`
                 },
                 '& .mermaid-diagram': {
                   marginTop: '1em',
