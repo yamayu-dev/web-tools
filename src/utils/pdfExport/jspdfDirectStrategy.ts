@@ -36,6 +36,14 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
     const { markdown, onProgress } = options
 
     try {
+      // 日本語・中国語・韓国語の文字が含まれているかチェック
+      if (this.containsCJKCharacters(markdown)) {
+        return {
+          success: false,
+          error: 'jsPDF直接描画方式は日本語・中国語・韓国語に対応していません。\n「オフスクリーン方式（推奨）」をお使いください。\n\njsPDF direct rendering does not support Japanese, Chinese, or Korean characters.\nPlease use "Offscreen Method (Recommended)" instead.'
+        }
+      }
+
       // Mermaid初期化
       mermaid.initialize({
         startOnLoad: false,
@@ -63,7 +71,7 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
       const contentWidth = pageWidth - (margin * 2)
       let currentY = margin
 
-      // フォント設定（日本語対応）
+      // フォント設定（英数字のみ）
       pdf.setFont('helvetica')
 
       for (const element of elements) {
@@ -472,5 +480,20 @@ export class JspdfDirectStrategy implements IPdfExportStrategy {
     })
 
     return y + 5
+  }
+
+  /**
+   * 日本語・中国語・韓国語（CJK）の文字が含まれているかチェック
+   * Check if text contains Japanese, Chinese, or Korean (CJK) characters
+   */
+  private containsCJKCharacters(text: string): boolean {
+    // Unicode範囲:
+    // 日本語ひらがな: \u3040-\u309F
+    // 日本語カタカナ: \u30A0-\u30FF
+    // 漢字（CJK統合漢字）: \u4E00-\u9FFF
+    // ハングル: \uAC00-\uD7AF
+    // 全角英数字・記号: \uFF00-\uFFEF
+    const cjkPattern = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF\uFF00-\uFFEF]/
+    return cjkPattern.test(text)
   }
 }
