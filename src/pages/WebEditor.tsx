@@ -217,7 +217,7 @@ const TAG_SNIPPETS = {
 </ul>`,
   link: `<a href="https://example.com" target="_blank">リンクテキスト</a>`,
   image: `<img src="https://via.placeholder.com/300x200" alt="画像の説明">`,
-}
+} as const
 
 export default function WebEditor() {
   const [html, setHtml] = useState('')
@@ -390,7 +390,15 @@ ${js}
     const snippet = TAG_SNIPPETS[snippetKey]
     try {
       await navigator.clipboard.writeText(snippet)
-      showToast(`${snippetKey}をクリップボードにコピーしました`, 'success', TOAST_DURATIONS.SHORT)
+      const tagName = {
+        table: 'テーブルタグ',
+        div: 'Divタグ',
+        form: 'フォームタグ',
+        list: 'リストタグ',
+        link: 'リンクタグ',
+        image: '画像タグ',
+      }[snippetKey]
+      showToast(`${tagName}をクリップボードにコピーしました`, 'success', TOAST_DURATIONS.SHORT)
     } catch {
       showToast('クリップボードへのコピーに失敗しました', 'error', TOAST_DURATIONS.SHORT)
     }
@@ -534,7 +542,12 @@ ${html}
               onClick={() => setIsToolbarCollapsed(!isToolbarCollapsed)}
               size="sm"
               variant="outline"
-              colorScheme="gray"
+              bg={colorStyles.bg.primary}
+              color={colorStyles.text.primary}
+              borderColor={colorStyles.border.default}
+              _hover={{
+                bg: colorStyles.bg.secondary
+              }}
             />
           </Flex>
           
@@ -723,14 +736,14 @@ ${html}
                   <Button
                     key={tab}
                     size="sm"
-                    variant={activeTab === tab ? 'solid' : 'ghost'}
-                    colorScheme="blue"
                     onClick={() => setActiveTab(tab)}
                     borderRadius="md md 0 0"
-                    color={activeTab === tab ? undefined : colorStyles.text.primary}
-                    bg={activeTab === tab ? undefined : 'transparent'}
+                    bg={activeTab === tab ? colorStyles.accent.blue.button : colorStyles.bg.primary}
+                    color={activeTab === tab ? 'white' : colorStyles.text.primary}
+                    borderColor={colorStyles.border.default}
+                    border="1px solid"
                     _hover={{
-                      bg: activeTab === tab ? undefined : colorStyles.bg.secondary,
+                      bg: activeTab === tab ? colorStyles.accent.blue.buttonHover : colorStyles.bg.secondary,
                     }}
                   >
                     {tab.toUpperCase()}
