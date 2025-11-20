@@ -290,12 +290,13 @@ export default function WebEditor() {
   // 初期サンプルをロード
   useEffect(() => {
     loadSample('basic')
-  }, [loadSample])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // プレビュー更新
   useEffect(() => {
     updatePreview()
-  }, [updatePreview])
+  }, [html, css, js, updatePreview])
 
   // ページ離脱時の警告
   useEffect(() => {
@@ -321,7 +322,7 @@ export default function WebEditor() {
     else setJs(value)
   }
 
-  // ファイル読み込み
+  // 個別ファイル読み込み（HTML/CSS/JS）
   const loadFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -329,12 +330,27 @@ export default function WebEditor() {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const content = JSON.parse(e.target?.result as string)
-        setHtml(content.html || '')
-        setCss(content.css || '')
-        setJs(content.js || '')
-        setHasUnsavedChanges(false)
-        showToast('ファイルを読み込みました', 'success', TOAST_DURATIONS.SHORT)
+        const content = e.target?.result as string
+        const extension = file.name.split('.').pop()?.toLowerCase()
+        
+        // 拡張子に応じて適切なエディタに読み込む
+        if (extension === 'html' || extension === 'htm') {
+          // HTML内容を抽出（bodyタグの中身のみ）
+          const bodyMatch = content.match(/<body[^>]*>([\s\S]*)<\/body>/i)
+          setHtml(bodyMatch ? bodyMatch[1].trim() : content)
+          setHasUnsavedChanges(true)
+          showToast('HTMLファイルを読み込みました', 'success', TOAST_DURATIONS.SHORT)
+        } else if (extension === 'css') {
+          setCss(content)
+          setHasUnsavedChanges(true)
+          showToast('CSSファイルを読み込みました', 'success', TOAST_DURATIONS.SHORT)
+        } else if (extension === 'js') {
+          setJs(content)
+          setHasUnsavedChanges(true)
+          showToast('JavaScriptファイルを読み込みました', 'success', TOAST_DURATIONS.SHORT)
+        } else {
+          showToast('対応していないファイル形式です', 'error', TOAST_DURATIONS.SHORT)
+        }
       } catch {
         showToast('ファイルの読み込みに失敗しました', 'error', TOAST_DURATIONS.LONG)
       }
@@ -345,26 +361,6 @@ export default function WebEditor() {
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
-  }
-
-  // ファイル保存
-  const saveToFile = () => {
-    const content = {
-      html,
-      css,
-      js,
-    }
-    const blob = new Blob([JSON.stringify(content, null, 2)], {
-      type: 'application/json',
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'web-editor-project.json'
-    a.click()
-    URL.revokeObjectURL(url)
-    setHasUnsavedChanges(false)
-    showToast('ファイルを保存しました', 'success', TOAST_DURATIONS.SHORT)
   }
 
   // HTML単体で保存
@@ -618,12 +614,12 @@ ${html}
                 onClick={() => fileInputRef.current?.click()}
                 colorScheme="green"
               >
-                JSON
+                ファイル
               </Button>
               <Input
                 ref={fileInputRef}
                 type="file"
-                accept=".json"
+                accept=".html,.htm,.css,.js"
                 onChange={loadFromFile}
                 display="none"
               />
@@ -665,7 +661,6 @@ ${html}
                   else if (value === 'js-only') saveJsFile()
                   else if (value === 'html-combined') saveAsHtml()
                   else if (value === 'zip') saveAsZip()
-                  else if (value === 'json') saveToFile()
                   e.target.value = ''
                 }}
                 _hover={{
@@ -678,7 +673,6 @@ ${html}
                 <option value="js-only">JS のみ</option>
                 <option value="html-combined">HTML 統合</option>
                 <option value="zip">ZIP</option>
-                <option value="json">JSON</option>
               </Box>
 
               {/* 表示モード切替 */}
