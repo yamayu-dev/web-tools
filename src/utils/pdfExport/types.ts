@@ -27,10 +27,10 @@ export interface IPdfExportStrategy {
 export const PDF_EXPORT_METHODS: Record<PdfExportMethod, { label: string; description: string }> = {
   'offscreen': {
     label: 'オフスクリーン方式（推奨）',
-    description: 'PC・Mobile共通で安定した出力。プレビュー相当のPDFを生成'
+    description: 'PC・Mobile共通で安定した出力。プレビュー相当のPDFを生成。日本語対応'
   },
   'jspdf-direct': {
     label: 'jsPDF直接描画',
-    description: 'Markdownから直接PDFを生成。テーブル・Mermaid対応（試験的）'
+    description: 'Markdownから直接PDFを生成。英語のみ対応（日本語非対応）'
   }
 }
