@@ -541,54 +541,58 @@ ${html}
           {!isToolbarCollapsed && (
             <Flex gap={2} flexWrap="wrap" pb={2}>
               {/* サンプル読み込み */}
-              <Box
-                as="select"
-                size="sm"
-                fontSize="sm"
-                px={3}
-                py={2}
-                borderRadius="md"
-                borderWidth="1px"
-                borderColor={colorStyles.border.default}
-                bg={colorStyles.bg.primary}
-                color={colorStyles.text.primary}
-                cursor="pointer"
+              <select
+                style={{
+                  fontSize: '14px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: colorStyles.bg.primary,
+                  color: colorStyles.text.primary,
+                  border: `1px solid ${colorStyles.border.default}`,
+                  cursor: 'pointer',
+                  height: '32px'
+                }}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   if (e.target.value) {
                     loadSample(e.target.value as keyof typeof SAMPLE_TEMPLATES)
                     e.target.value = ''
                   }
                 }}
-                _hover={{
-                  borderColor: colorStyles.accent.blue.linkColor,
+                onMouseOver={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
+                }}
+                onMouseOut={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
                 }}
               >
                 <option value="">サンプル</option>
                 <option value="basic">基本</option>
                 <option value="counter">カウントアップ</option>
-              </Box>
+              </select>
 
               {/* タグをクリップボードにコピー */}
-              <Box
-                as="select"
-                size="sm"
-                fontSize="sm"
-                px={3}
-                py={2}
-                borderRadius="md"
-                borderWidth="1px"
-                borderColor={colorStyles.border.default}
-                bg={colorStyles.bg.primary}
-                color={colorStyles.text.primary}
-                cursor="pointer"
+              <select
+                style={{
+                  fontSize: '14px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: colorStyles.bg.primary,
+                  color: colorStyles.text.primary,
+                  border: `1px solid ${colorStyles.border.default}`,
+                  cursor: 'pointer',
+                  height: '32px'
+                }}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   if (e.target.value) {
                     copySnippetToClipboard(e.target.value as keyof typeof TAG_SNIPPETS)
                     e.target.value = ''
                   }
                 }}
-                _hover={{
-                  borderColor: colorStyles.accent.blue.linkColor,
+                onMouseOver={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
+                }}
+                onMouseOut={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
                 }}
               >
                 <option value="">タグコピー</option>
@@ -598,14 +602,20 @@ ${html}
                 <option value="list">リスト</option>
                 <option value="link">リンク</option>
                 <option value="image">画像</option>
-              </Box>
+              </select>
 
               {/* ファイル読み込み */}
               <Button
                 size="sm"
                 leftIcon={<Upload size={16} />}
                 onClick={() => fileInputRef.current?.click()}
-                colorScheme="green"
+                bg={colorStyles.bg.primary}
+                color={colorStyles.text.primary}
+                borderColor={colorStyles.border.default}
+                border="1px solid"
+                _hover={{
+                  bg: colorStyles.bg.secondary
+                }}
               >
                 ファイル
               </Button>
@@ -622,7 +632,13 @@ ${html}
                 size="sm"
                 leftIcon={<FileArchive size={16} />}
                 onClick={() => zipInputRef.current?.click()}
-                colorScheme="green"
+                bg={colorStyles.bg.primary}
+                color={colorStyles.text.primary}
+                borderColor={colorStyles.border.default}
+                border="1px solid"
+                _hover={{
+                  bg: colorStyles.bg.secondary
+                }}
               >
                 ZIP
               </Button>
@@ -635,18 +651,17 @@ ${html}
               />
 
               {/* 保存 */}
-              <Box
-                as="select"
-                size="sm"
-                fontSize="sm"
-                px={3}
-                py={2}
-                borderRadius="md"
-                borderWidth="1px"
-                borderColor={colorStyles.border.default}
-                bg={colorStyles.bg.primary}
-                color={colorStyles.text.primary}
-                cursor="pointer"
+              <select
+                style={{
+                  fontSize: '14px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: colorStyles.bg.primary,
+                  color: colorStyles.text.primary,
+                  border: `1px solid ${colorStyles.border.default}`,
+                  cursor: 'pointer',
+                  height: '32px'
+                }}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   const value = e.target.value
                   if (value === 'html-only') saveHtmlFile()
@@ -656,8 +671,11 @@ ${html}
                   else if (value === 'zip') saveAsZip()
                   e.target.value = ''
                 }}
-                _hover={{
-                  borderColor: colorStyles.accent.blue.linkColor,
+                onMouseOver={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
+                }}
+                onMouseOut={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
                 }}
               >
                 <option value="">保存</option>
@@ -666,7 +684,7 @@ ${html}
                 <option value="js-only">JS のみ</option>
                 <option value="html-combined">HTML 統合</option>
                 <option value="zip">ZIP</option>
-              </Box>
+              </select>
 
               {/* 表示モード切替 */}
               <Button
@@ -676,7 +694,11 @@ ${html}
                   else if (viewMode === 'preview') setViewMode(isPCSize ? 'split' : 'edit')
                   else setViewMode('edit')
                 }}
-                colorScheme="blue"
+                bg={colorStyles.accent.blue.button}
+                color="white"
+                _hover={{
+                  bg: colorStyles.accent.blue.buttonHover
+                }}
               >
                 {viewMode === 'edit' ? '編集' : viewMode === 'preview' ? 'プレビュー' : '同時'}
               </Button>
