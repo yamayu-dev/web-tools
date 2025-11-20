@@ -14,6 +14,15 @@ import { useColorStyles } from '../hooks/useColorStyles'
 import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
 
+/**
+ * CodeRunner Component
+ * 
+ * Security Note: This component uses eval() for TypeScript execution, which is intentional
+ * for a code playground/educational tool similar to paiza.io. Users should be aware they
+ * are executing arbitrary code in their own browser context. For production use cases
+ * requiring sandboxing, consider using Web Workers or iframe sandboxing.
+ */
+
 type Language = 'typescript' | 'python' | 'csharp'
 
 // サンプルコード
