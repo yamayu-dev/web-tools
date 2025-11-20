@@ -20,6 +20,7 @@ import {
 import JSZip from 'jszip'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
+import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
 
 // サンプルテンプレート
@@ -217,7 +218,7 @@ const TAG_SNIPPETS = {
 </ul>`,
   link: `<a href="https://example.com" target="_blank">リンクテキスト</a>`,
   image: `<img src="https://via.placeholder.com/300x200" alt="画像の説明">`,
-}
+} as const
 
 export default function WebEditor() {
   const [html, setHtml] = useState('')
@@ -227,10 +228,12 @@ export default function WebEditor() {
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false)
+  const [previewContent, setPreviewContent] = useState('')
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const zipInputRef = useRef<HTMLInputElement>(null)
   const colorStyles = useColorStyles()
+  const { colorMode } = useColorMode()
   const { showToast } = useToast()
 
   // Check if screen is PC size
@@ -261,41 +264,33 @@ export default function WebEditor() {
 
   // プレビュー更新
   const updatePreview = useCallback(() => {
-    const iframe = iframeRef.current
-    if (!iframe) return
-
-    const document = iframe.contentDocument
-    if (!document) return
-
-    const content = `
-      <!DOCTYPE html>
-      <html lang="ja">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>${css}</style>
-      </head>
-      <body>
-        ${html}
-        <script>${js}</script>
-      </body>
-      </html>
-    `
-
-    document.open()
-    document.write(content)
-    document.close()
+    const content = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>${css}</style>
+</head>
+<body>
+${html}
+  <script>${js}</script>
+</body>
+</html>`
+    
+    setPreviewContent(content)
   }, [html, css, js])
 
   // 初期サンプルをロード
   useEffect(() => {
     loadSample('basic')
-  }, [loadSample])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // プレビュー更新
   useEffect(() => {
     updatePreview()
-  }, [updatePreview])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [html, css, js])
 
   // ページ離脱時の警告
   useEffect(() => {
@@ -321,7 +316,7 @@ export default function WebEditor() {
     else setJs(value)
   }
 
-  // ファイル読み込み
+  // 個別ファイル読み込み（HTML/CSS/JS）
   const loadFromFile = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
@@ -329,12 +324,27 @@ export default function WebEditor() {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const content = JSON.parse(e.target?.result as string)
-        setHtml(content.html || '')
-        setCss(content.css || '')
-        setJs(content.js || '')
-        setHasUnsavedChanges(false)
-        showToast('ファイルを読み込みました', 'success', TOAST_DURATIONS.SHORT)
+        const content = e.target?.result as string
+        const extension = file.name.split('.').pop()?.toLowerCase()
+        
+        // 拡張子に応じて適切なエディタに読み込む
+        if (extension === 'html' || extension === 'htm') {
+          // HTML内容を抽出（bodyタグの中身のみ）
+          const bodyMatch = content.match(/<body[^>]*>([\s\S]*)<\/body>/i)
+          setHtml(bodyMatch ? bodyMatch[1].trim() : content)
+          setHasUnsavedChanges(true)
+          showToast('HTMLファイルを読み込みました', 'success', TOAST_DURATIONS.SHORT)
+        } else if (extension === 'css') {
+          setCss(content)
+          setHasUnsavedChanges(true)
+          showToast('CSSファイルを読み込みました', 'success', TOAST_DURATIONS.SHORT)
+        } else if (extension === 'js') {
+          setJs(content)
+          setHasUnsavedChanges(true)
+          showToast('JavaScriptファイルを読み込みました', 'success', TOAST_DURATIONS.SHORT)
+        } else {
+          showToast('対応していないファイル形式です', 'error', TOAST_DURATIONS.SHORT)
+        }
       } catch {
         showToast('ファイルの読み込みに失敗しました', 'error', TOAST_DURATIONS.LONG)
       }
@@ -345,26 +355,6 @@ export default function WebEditor() {
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
-  }
-
-  // ファイル保存
-  const saveToFile = () => {
-    const content = {
-      html,
-      css,
-      js,
-    }
-    const blob = new Blob([JSON.stringify(content, null, 2)], {
-      type: 'application/json',
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'web-editor-project.json'
-    a.click()
-    URL.revokeObjectURL(url)
-    setHasUnsavedChanges(false)
-    showToast('ファイルを保存しました', 'success', TOAST_DURATIONS.SHORT)
   }
 
   // HTML単体で保存
@@ -402,7 +392,15 @@ ${js}
     const snippet = TAG_SNIPPETS[snippetKey]
     try {
       await navigator.clipboard.writeText(snippet)
-      showToast(`${snippetKey}をクリップボードにコピーしました`, 'success', TOAST_DURATIONS.SHORT)
+      const tagName = {
+        table: 'テーブルタグ',
+        div: 'Divタグ',
+        form: 'フォームタグ',
+        list: 'リストタグ',
+        link: 'リンクタグ',
+        image: '画像タグ',
+      }[snippetKey]
+      showToast(`${tagName}をクリップボードにコピーしました`, 'success', TOAST_DURATIONS.SHORT)
     } catch {
       showToast('クリップボードへのコピーに失敗しました', 'error', TOAST_DURATIONS.SHORT)
     }
@@ -545,61 +543,73 @@ ${html}
               icon={isToolbarCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
               onClick={() => setIsToolbarCollapsed(!isToolbarCollapsed)}
               size="sm"
-              variant="ghost"
+              bg={colorStyles.bg.primary}
+              color={colorStyles.text.primary}
+              borderColor={colorStyles.border.default}
+              border="1px solid"
+              _hover={{
+                bg: colorStyles.bg.secondary
+              }}
             />
           </Flex>
           
           {!isToolbarCollapsed && (
             <Flex gap={2} flexWrap="wrap" pb={2}>
               {/* サンプル読み込み */}
-              <Box
-                as="select"
-                size="sm"
-                fontSize="sm"
-                px={3}
-                py={2}
-                borderRadius="md"
-                borderWidth="1px"
-                borderColor={colorStyles.border.default}
-                bg={colorStyles.bg.primary}
-                color={colorStyles.text.primary}
-                cursor="pointer"
+              <select
+                key={`sample-${colorMode}`}
+                style={{
+                  fontSize: '14px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: colorStyles.bg.primary,
+                  color: colorStyles.text.primary,
+                  border: `1px solid ${colorStyles.border.default}`,
+                  cursor: 'pointer',
+                  height: '32px'
+                }}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   if (e.target.value) {
                     loadSample(e.target.value as keyof typeof SAMPLE_TEMPLATES)
                     e.target.value = ''
                   }
                 }}
-                _hover={{
-                  borderColor: colorStyles.accent.blue.linkColor,
+                onMouseOver={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
+                }}
+                onMouseOut={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
                 }}
               >
                 <option value="">サンプル</option>
                 <option value="basic">基本</option>
                 <option value="counter">カウントアップ</option>
-              </Box>
+              </select>
 
               {/* タグをクリップボードにコピー */}
-              <Box
-                as="select"
-                size="sm"
-                fontSize="sm"
-                px={3}
-                py={2}
-                borderRadius="md"
-                borderWidth="1px"
-                borderColor={colorStyles.border.default}
-                bg={colorStyles.bg.primary}
-                color={colorStyles.text.primary}
-                cursor="pointer"
+              <select
+                key={`tags-${colorMode}`}
+                style={{
+                  fontSize: '14px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: colorStyles.bg.primary,
+                  color: colorStyles.text.primary,
+                  border: `1px solid ${colorStyles.border.default}`,
+                  cursor: 'pointer',
+                  height: '32px'
+                }}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   if (e.target.value) {
                     copySnippetToClipboard(e.target.value as keyof typeof TAG_SNIPPETS)
                     e.target.value = ''
                   }
                 }}
-                _hover={{
-                  borderColor: colorStyles.accent.blue.linkColor,
+                onMouseOver={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
+                }}
+                onMouseOut={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
                 }}
               >
                 <option value="">タグコピー</option>
@@ -609,21 +619,27 @@ ${html}
                 <option value="list">リスト</option>
                 <option value="link">リンク</option>
                 <option value="image">画像</option>
-              </Box>
+              </select>
 
               {/* ファイル読み込み */}
               <Button
                 size="sm"
                 leftIcon={<Upload size={16} />}
                 onClick={() => fileInputRef.current?.click()}
-                colorScheme="green"
+                bg={colorStyles.bg.primary}
+                color={colorStyles.text.primary}
+                borderColor={colorStyles.border.default}
+                border="1px solid"
+                _hover={{
+                  bg: colorStyles.bg.secondary
+                }}
               >
-                JSON
+                ファイル
               </Button>
               <Input
                 ref={fileInputRef}
                 type="file"
-                accept=".json"
+                accept=".html,.htm,.css,.js"
                 onChange={loadFromFile}
                 display="none"
               />
@@ -633,7 +649,13 @@ ${html}
                 size="sm"
                 leftIcon={<FileArchive size={16} />}
                 onClick={() => zipInputRef.current?.click()}
-                colorScheme="green"
+                bg={colorStyles.bg.primary}
+                color={colorStyles.text.primary}
+                borderColor={colorStyles.border.default}
+                border="1px solid"
+                _hover={{
+                  bg: colorStyles.bg.secondary
+                }}
               >
                 ZIP
               </Button>
@@ -646,18 +668,18 @@ ${html}
               />
 
               {/* 保存 */}
-              <Box
-                as="select"
-                size="sm"
-                fontSize="sm"
-                px={3}
-                py={2}
-                borderRadius="md"
-                borderWidth="1px"
-                borderColor={colorStyles.border.default}
-                bg={colorStyles.bg.primary}
-                color={colorStyles.text.primary}
-                cursor="pointer"
+              <select
+                key={`save-${colorMode}`}
+                style={{
+                  fontSize: '14px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: colorStyles.bg.primary,
+                  color: colorStyles.text.primary,
+                  border: `1px solid ${colorStyles.border.default}`,
+                  cursor: 'pointer',
+                  height: '32px'
+                }}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   const value = e.target.value
                   if (value === 'html-only') saveHtmlFile()
@@ -665,11 +687,13 @@ ${html}
                   else if (value === 'js-only') saveJsFile()
                   else if (value === 'html-combined') saveAsHtml()
                   else if (value === 'zip') saveAsZip()
-                  else if (value === 'json') saveToFile()
                   e.target.value = ''
                 }}
-                _hover={{
-                  borderColor: colorStyles.accent.blue.linkColor,
+                onMouseOver={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
+                }}
+                onMouseOut={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
                 }}
               >
                 <option value="">保存</option>
@@ -678,8 +702,7 @@ ${html}
                 <option value="js-only">JS のみ</option>
                 <option value="html-combined">HTML 統合</option>
                 <option value="zip">ZIP</option>
-                <option value="json">JSON</option>
-              </Box>
+              </select>
 
               {/* 表示モード切替 */}
               <Button
@@ -689,7 +712,11 @@ ${html}
                   else if (viewMode === 'preview') setViewMode(isPCSize ? 'split' : 'edit')
                   else setViewMode('edit')
                 }}
-                colorScheme="blue"
+                bg={colorStyles.accent.blue.button}
+                color="white"
+                _hover={{
+                  bg: colorStyles.accent.blue.buttonHover
+                }}
               >
                 {viewMode === 'edit' ? '編集' : viewMode === 'preview' ? 'プレビュー' : '同時'}
               </Button>
@@ -714,10 +741,15 @@ ${html}
                   <Button
                     key={tab}
                     size="sm"
-                    variant={activeTab === tab ? 'solid' : 'ghost'}
-                    colorScheme={activeTab === tab ? 'blue' : 'gray'}
                     onClick={() => setActiveTab(tab)}
                     borderRadius="md md 0 0"
+                    bg={activeTab === tab ? colorStyles.accent.blue.button : colorStyles.bg.primary}
+                    color={activeTab === tab ? 'white' : colorStyles.text.primary}
+                    borderColor={colorStyles.border.default}
+                    border="1px solid"
+                    _hover={{
+                      bg: activeTab === tab ? colorStyles.accent.blue.buttonHover : colorStyles.bg.secondary,
+                    }}
                   >
                     {tab.toUpperCase()}
                   </Button>
@@ -768,6 +800,7 @@ ${html}
               </Box>
               <iframe
                 ref={iframeRef}
+                srcDoc={previewContent}
                 style={{
                   width: '100%',
                   height: 'calc(100% - 40px)',
