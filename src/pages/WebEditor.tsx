@@ -20,6 +20,7 @@ import {
 import JSZip from 'jszip'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
+import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
 
 // サンプルテンプレート
@@ -232,6 +233,7 @@ export default function WebEditor() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const zipInputRef = useRef<HTMLInputElement>(null)
   const colorStyles = useColorStyles()
+  const { colorMode } = useColorMode()
   const { showToast } = useToast()
 
   // Check if screen is PC size
@@ -541,10 +543,10 @@ ${html}
               icon={isToolbarCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
               onClick={() => setIsToolbarCollapsed(!isToolbarCollapsed)}
               size="sm"
-              variant="outline"
               bg={colorStyles.bg.primary}
               color={colorStyles.text.primary}
               borderColor={colorStyles.border.default}
+              border="1px solid"
               _hover={{
                 bg: colorStyles.bg.secondary
               }}
@@ -555,6 +557,7 @@ ${html}
             <Flex gap={2} flexWrap="wrap" pb={2}>
               {/* サンプル読み込み */}
               <select
+                key={`sample-${colorMode}`}
                 style={{
                   fontSize: '14px',
                   padding: '6px 12px',
@@ -585,6 +588,7 @@ ${html}
 
               {/* タグをクリップボードにコピー */}
               <select
+                key={`tags-${colorMode}`}
                 style={{
                   fontSize: '14px',
                   padding: '6px 12px',
@@ -665,6 +669,7 @@ ${html}
 
               {/* 保存 */}
               <select
+                key={`save-${colorMode}`}
                 style={{
                   fontSize: '14px',
                   padding: '6px 12px',
