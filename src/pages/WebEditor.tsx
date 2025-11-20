@@ -227,6 +227,7 @@ export default function WebEditor() {
   const [viewMode, setViewMode] = useState<'edit' | 'preview' | 'split'>('split')
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [isToolbarCollapsed, setIsToolbarCollapsed] = useState(false)
+  const [previewContent, setPreviewContent] = useState('')
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const zipInputRef = useRef<HTMLInputElement>(null)
@@ -261,30 +262,20 @@ export default function WebEditor() {
 
   // プレビュー更新
   const updatePreview = useCallback(() => {
-    const iframe = iframeRef.current
-    if (!iframe) return
-
-    const document = iframe.contentDocument
-    if (!document) return
-
-    const content = `
-      <!DOCTYPE html>
-      <html lang="ja">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>${css}</style>
-      </head>
-      <body>
-        ${html}
-        <script>${js}</script>
-      </body>
-      </html>
-    `
-
-    document.open()
-    document.write(content)
-    document.close()
+    const content = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>${css}</style>
+</head>
+<body>
+${html}
+  <script>${js}</script>
+</body>
+</html>`
+    
+    setPreviewContent(content)
   }, [html, css, js])
 
   // 初期サンプルをロード
@@ -296,7 +287,8 @@ export default function WebEditor() {
   // プレビュー更新
   useEffect(() => {
     updatePreview()
-  }, [html, css, js, updatePreview])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [html, css, js])
 
   // ページ離脱時の警告
   useEffect(() => {
@@ -709,9 +701,14 @@ ${html}
                     key={tab}
                     size="sm"
                     variant={activeTab === tab ? 'solid' : 'ghost'}
-                    colorScheme={activeTab === tab ? 'blue' : 'gray'}
+                    colorScheme="blue"
                     onClick={() => setActiveTab(tab)}
                     borderRadius="md md 0 0"
+                    color={activeTab === tab ? undefined : colorStyles.text.primary}
+                    bg={activeTab === tab ? undefined : 'transparent'}
+                    _hover={{
+                      bg: activeTab === tab ? undefined : colorStyles.bg.secondary,
+                    }}
                   >
                     {tab.toUpperCase()}
                   </Button>
@@ -762,6 +759,7 @@ ${html}
               </Box>
               <iframe
                 ref={iframeRef}
+                srcDoc={previewContent}
                 style={{
                   width: '100%',
                   height: 'calc(100% - 40px)',
