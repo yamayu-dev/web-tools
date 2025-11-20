@@ -533,7 +533,8 @@ ${html}
               icon={isToolbarCollapsed ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
               onClick={() => setIsToolbarCollapsed(!isToolbarCollapsed)}
               size="sm"
-              variant="ghost"
+              variant="outline"
+              colorScheme="gray"
             />
           </Flex>
           
