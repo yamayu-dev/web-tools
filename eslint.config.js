@@ -5,6 +5,16 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
+// Shared rule to restrict identifiers to ASCII characters only
+// This prevents issues like "varあ" being treated as a valid identifier name
+const asciiIdentifierRule = {
+  'id-match': ['error', '^[a-zA-Z0-9_$]+$', {
+    properties: true,
+    classFields: true,
+    onlyDeclarations: false,
+  }],
+}
+
 export default defineConfig([
   globalIgnores(['dist', 'public', 'node_modules', '*.config.js', '*.config.ts', 'scripts']),
   {
@@ -19,15 +29,7 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
-    rules: {
-      // Restrict identifiers to ASCII characters only to prevent confusing Unicode identifiers
-      // This prevents issues like "varあ" being treated as a valid identifier name
-      'id-match': ['error', '^[a-zA-Z0-9_$]+$', {
-        properties: true,
-        classFields: true,
-        onlyDeclarations: false,
-      }],
-    },
+    rules: asciiIdentifierRule,
   },
   {
     files: ['**/*.{js,jsx}'],
@@ -36,13 +38,6 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
-    rules: {
-      // Restrict identifiers to ASCII characters only to prevent confusing Unicode identifiers
-      'id-match': ['error', '^[a-zA-Z0-9_$]+$', {
-        properties: true,
-        classFields: true,
-        onlyDeclarations: false,
-      }],
-    },
+    rules: asciiIdentifierRule,
   },
 ])
