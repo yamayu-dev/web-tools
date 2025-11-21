@@ -13,7 +13,7 @@ import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
-import { getWasmFilePath } from '../constants/wasmConstants'
+import { getWasmFilePath, WASM_CONFIG } from '../constants/wasmConstants'
 
 /**
  * CodeRunner Component
@@ -238,7 +238,7 @@ output
           '【パス情報】\n' +
           `- BASE_URL: ${baseUrl}\n` +
           `- 読み込みパス: ${wasmPath}\n` +
-          `- 配置先: public/wasm/dotnet.wasm\n\n` +
+          `- 配置先: public/${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}\n\n` +
           'WASMファイルをビルドするには：\n' +
           '1. csharp-wasm.config.json のbuildVersionを更新\n' +
           '2. GitHub Actionsが自動的にビルドを実行\n' +
