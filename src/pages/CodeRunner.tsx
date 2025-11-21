@@ -215,7 +215,9 @@ output
       
       // Check if WASM files are available
       try {
-        const response = await fetch('/wasm/CSharpRunner.wasm')
+        // BASE_URL includes trailing slash (e.g., '/web-tools/' or '/')
+        const wasmPath = `${import.meta.env.BASE_URL}wasm/CSharpRunner.wasm`
+        const response = await fetch(wasmPath)
         if (!response.ok) {
           throw new Error('WASM files not found')
         }
