@@ -24,6 +24,7 @@ import { TOAST_DURATIONS } from '../constants/uiConstants'
  */
 
 type Language = 'typescript' | 'python' | 'csharp'
+type CSharpExecutionMode = 'api' | 'wasm'
 
 // サンプルコード
 const SAMPLE_CODE = {
@@ -82,7 +83,10 @@ export default function CodeRunner() {
   const [output, setOutput] = useState('')
   const [isRunning, setIsRunning] = useState(false)
   const [pyodideReady, setPyodideReady] = useState(false)
+  const [csharpMode, setCSharpMode] = useState<CSharpExecutionMode>('api')
+  const [wasmReady, setWasmReady] = useState(false)
   const pyodideRef = useRef<unknown>(null)
+  const wasmRef = useRef<unknown>(null)
   const colorStyles = useColorStyles()
   const { colorMode } = useColorMode()
   const { showToast } = useToast()
@@ -98,6 +102,13 @@ export default function CodeRunner() {
   useEffect(() => {
     setCode(SAMPLE_CODE[language])
   }, [language])
+
+  // C# WASMランタイムの初期化
+  useEffect(() => {
+    if (language === 'csharp' && csharpMode === 'wasm' && !wasmReady) {
+      loadCSharpWasm()
+    }
+  }, [language, csharpMode, wasmReady])
 
   const loadPyodide = async () => {
     try {
@@ -198,10 +209,74 @@ output
     }
   }
 
-  const runCSharp = async () => {
-    // Real C# execution using online compilation API
+  const loadCSharpWasm = async () => {
     try {
-      setOutput('C#コードをコンパイル中...\n')
+      setOutput('C# WebAssemblyランタイムを読み込み中...\n')
+      
+      // Check if WASM files are available
+      try {
+        const response = await fetch('/wasm/CSharpRunner.wasm')
+        if (!response.ok) {
+          throw new Error('WASM files not found')
+        }
+      } catch {
+        setOutput(
+          'C# WebAssemblyファイルが見つかりません。\n\n' +
+          'WASMファイルをビルドするには：\n' +
+          '1. csharp-wasm.config.json のbuildVersionを更新\n' +
+          '2. GitHub Actionsが自動的にビルドを実行\n' +
+          '3. ビルド完了後、このページをリロード\n\n' +
+          '現在はAPI版を使用してください。'
+        )
+        setWasmReady(false)
+        return
+      }
+
+      // TODO: Load actual WASM runtime here
+      // This will be implemented once the C# WASM project is built
+      wasmRef.current = { /* WASM runtime will be loaded here */ }
+      setWasmReady(true)
+      setOutput('C# WebAssemblyランタイムの準備が完了しました\n')
+    } catch (error) {
+      setOutput(`C# WebAssemblyランタイムの読み込みに失敗しました: ${error}\n`)
+      setWasmReady(false)
+    }
+  }
+
+  const runCSharp = async () => {
+    // Real C# execution using online compilation API or WASM
+    if (csharpMode === 'wasm') {
+      await runCSharpWasm()
+    } else {
+      await runCSharpApi()
+    }
+  }
+
+  const runCSharpWasm = async () => {
+    if (!wasmReady) {
+      setOutput('C# WebAssemblyランタイムが準備できていません。\n初期化を待つか、API版に切り替えてください。')
+      return
+    }
+
+    try {
+      setOutput('C#コードを実行中（WASM版）...\n')
+      
+      // TODO: Implement actual WASM execution
+      // This is a placeholder for when the WASM runtime is implemented
+      setOutput(
+        'C# WASM実行機能は実装中です。\n\n' +
+        '現在、WASMランタイムの統合作業を進めています。\n' +
+        '完全な実装までは、API版をご利用ください。'
+      )
+    } catch (error) {
+      const err = error as Error
+      setOutput(`実行エラー: ${err.message}`)
+    }
+  }
+
+  const runCSharpApi = async () => {
+    try {
+      setOutput('C#コードをコンパイル中（API版）...\n')
       
       // Use Wandbox API for C# compilation and execution
       const response = await fetch('https://wandbox.org/api/compile.json', {
@@ -319,6 +394,35 @@ output
               <option value="csharp">C#</option>
             </select>
 
+            {/* C#実行モード切り替え */}
+            {language === 'csharp' && (
+              <select
+                key={`csharp-mode-${colorMode}`}
+                value={csharpMode}
+                onChange={(e) => setCSharpMode(e.target.value as CSharpExecutionMode)}
+                style={{
+                  fontSize: '14px',
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  backgroundColor: colorStyles.bg.primary,
+                  color: colorStyles.text.primary,
+                  border: `1px solid ${colorStyles.border.default}`,
+                  cursor: 'pointer',
+                  height: '32px',
+                  width: '150px'
+                }}
+                onMouseOver={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
+                }}
+                onMouseOut={(e) => {
+                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
+                }}
+              >
+                <option value="api">API版</option>
+                <option value="wasm">WASM版</option>
+              </select>
+            )}
+
             {/* 実行ボタン */}
             <Button
               leftIcon={<Play size={16} />}
@@ -362,7 +466,7 @@ output
             </Box>
           )}
 
-          {language === 'csharp' && (
+          {language === 'csharp' && csharpMode === 'api' && (
             <Box
               bg="blue.100"
               color="blue.800"
@@ -371,7 +475,33 @@ output
               fontSize="sm"
               mb={2}
             >
-              注意: Wandbox APIを使用してC#コードを実際にコンパイル・実行します。
+              実行モード: API版 - Wandbox APIを使用してC#コードを実際にコンパイル・実行します。
+            </Box>
+          )}
+
+          {language === 'csharp' && csharpMode === 'wasm' && !wasmReady && (
+            <Box
+              bg="yellow.100"
+              color="yellow.800"
+              p={2}
+              rounded="md"
+              fontSize="sm"
+              mb={2}
+            >
+              C# WebAssemblyランタイムを初期化しています...
+            </Box>
+          )}
+
+          {language === 'csharp' && csharpMode === 'wasm' && wasmReady && (
+            <Box
+              bg="green.100"
+              color="green.800"
+              p={2}
+              rounded="md"
+              fontSize="sm"
+              mb={2}
+            >
+              実行モード: WASM版 - ブラウザ上でC#コードを直接実行します。
             </Box>
           )}
         </Box>
