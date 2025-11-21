@@ -13,7 +13,7 @@ import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
-import { getWasmFilePath } from '../constants/wasmConstants'
+import { getWasmFilePath, WASM_CONFIG } from '../constants/wasmConstants'
 
 /**
  * CodeRunner Component
@@ -214,10 +214,12 @@ output
     try {
       setOutput('C# WebAssemblyランタイムを読み込み中...\n')
       
+      // BASE_URL includes trailing slash (e.g., '/web-tools/' or '/')
+      const baseUrl = import.meta.env.BASE_URL
+      const wasmPath = getWasmFilePath(baseUrl)
+      
       // Check if WASM files are available
       try {
-        // BASE_URL includes trailing slash (e.g., '/web-tools/' or '/')
-        const wasmPath = getWasmFilePath(import.meta.env.BASE_URL)
         const response = await fetch(wasmPath)
         
         // Check if the response is actually a WASM file, not HTML from SPA routing
@@ -233,6 +235,10 @@ output
       } catch {
         setOutput(
           'C# WebAssemblyファイルが見つかりません。\n\n' +
+          '【パス情報】\n' +
+          `- BASE_URL: ${baseUrl}\n` +
+          `- 読み込みパス: ${wasmPath}\n` +
+          `- 配置先: public/${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}\n\n` +
           'WASMファイルをビルドするには：\n' +
           '1. csharp-wasm.config.json のbuildVersionを更新\n' +
           '2. GitHub Actionsが自動的にビルドを実行\n' +
