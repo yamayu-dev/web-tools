@@ -214,7 +214,7 @@ output
       
       // BASE_URL includes trailing slash (e.g., '/web-tools/' or '/')
       const baseUrl = import.meta.env.BASE_URL
-      const wasmPath = `${baseUrl}${WASM_CONFIG.OUTPUT_DIR}/dotnet.native.wasm`
+      const wasmPath = `${baseUrl}${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}`
       
       // Check if WASM files are available
       try {
@@ -236,7 +236,7 @@ output
           '【パス情報】\n' +
           `- BASE_URL: ${baseUrl}\n` +
           `- 読み込みパス: ${wasmPath}\n` +
-          `- 配置先: public/${WASM_CONFIG.OUTPUT_DIR}/\n\n` +
+          `- 配置先: public/${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}\n\n` +
           'WASMファイルをビルドするには：\n' +
           '1. csharp-wasm.config.json のbuildVersionを更新\n' +
           '2. GitHub Actionsが自動的にビルドを実行\n' +
