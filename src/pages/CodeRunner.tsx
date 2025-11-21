@@ -214,10 +214,12 @@ output
     try {
       setOutput('C# WebAssemblyランタイムを読み込み中...\n')
       
+      // BASE_URL includes trailing slash (e.g., '/web-tools/' or '/')
+      const baseUrl = import.meta.env.BASE_URL
+      const wasmPath = getWasmFilePath(baseUrl)
+      
       // Check if WASM files are available
       try {
-        // BASE_URL includes trailing slash (e.g., '/web-tools/' or '/')
-        const wasmPath = getWasmFilePath(import.meta.env.BASE_URL)
         const response = await fetch(wasmPath)
         
         // Check if the response is actually a WASM file, not HTML from SPA routing
@@ -231,8 +233,6 @@ output
           throw new Error('WASM files not found')
         }
       } catch {
-        const wasmPath = getWasmFilePath(import.meta.env.BASE_URL)
-        const baseUrl = import.meta.env.BASE_URL
         setOutput(
           'C# WebAssemblyファイルが見つかりません。\n\n' +
           '【パス情報】\n' +
