@@ -220,8 +220,12 @@ output
         const response = await fetch(wasmPath)
         
         // Check if the response is actually a WASM file, not HTML from SPA routing
+        if (!response.ok) {
+          throw new Error('WASM files not found')
+        }
+        
         const contentType = response.headers.get('content-type')
-        if (!response.ok || !contentType || !contentType.includes('application/wasm')) {
+        if (!contentType || !contentType.toLowerCase().includes('application/wasm')) {
           throw new Error('WASM files not found')
         }
       } catch {
