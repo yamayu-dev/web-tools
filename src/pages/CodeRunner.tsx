@@ -265,7 +265,8 @@ output
 
   const runCSharpWasm = async () => {
     if (!wasmReady) {
-      setOutput('C# WebAssemblyランタイムが準備できていません。\n初期化を待ってください。')
+      setOutput(`C# WebAssemblyランタイムが準備できていません。
+初期化を待ってください。`)
       return
     }
 
@@ -274,16 +275,17 @@ output
       
       // TODO: Implement actual WASM execution with Roslyn compilation
       // For now, show that WASM is loaded and ready
-      setOutput(
-        'C# WASM実行機能を準備中です。\n\n' +
-        '✓ WebAssemblyランタイムは正常にロードされました\n' +
-        '✓ dotnet.wasmファイルが利用可能です\n\n' +
-        '現在、Roslynコンパイラの統合作業を進めています。\n' +
-        '完全な実装が完了するまでお待ちください。\n\n' +
-        '【技術情報】\n' +
-        `- WASMファイル: ${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}\n` +
-        `- ランタイム状態: ${wasmReady ? '準備完了' : '初期化中'}`
-      )
+      setOutput(`C# WASM実行機能を準備中です。
+
+✓ WebAssemblyランタイムは正常にロードされました
+✓ dotnet.wasmファイルが利用可能です
+
+現在、Roslynコンパイラの統合作業を進めています。
+完全な実装が完了するまでお待ちください。
+
+【技術情報】
+- WASMファイル: ${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}
+- ランタイム状態: ${wasmReady ? '準備完了' : '初期化中'}`)
     } catch (error) {
       const err = error as Error
       setOutput(`実行エラー: ${err.message}`)
