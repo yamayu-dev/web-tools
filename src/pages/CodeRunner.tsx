@@ -82,9 +82,7 @@ export default function CodeRunner() {
   const [output, setOutput] = useState('')
   const [isRunning, setIsRunning] = useState(false)
   const [pyodideReady, setPyodideReady] = useState(false)
-  const [dotnetReady, setDotnetReady] = useState(false)
   const pyodideRef = useRef<unknown>(null)
-  const dotnetRef = useRef<unknown>(null)
   const colorStyles = useColorStyles()
   const { colorMode } = useColorMode()
   const { showToast } = useToast()
@@ -95,13 +93,6 @@ export default function CodeRunner() {
       loadPyodide()
     }
   }, [language, pyodideReady])
-
-  // .NET Runtimeの初期化
-  useEffect(() => {
-    if (language === 'csharp' && !dotnetReady) {
-      loadDotnet()
-    }
-  }, [language, dotnetReady])
 
   // 初期サンプルコードをロード
   useEffect(() => {
@@ -120,26 +111,6 @@ export default function CodeRunner() {
       setOutput('Pythonランタイムの準備が完了しました\n')
     } catch (error) {
       setOutput(`Pythonランタイムの読み込みに失敗しました: ${error}\n`)
-    }
-  }
-
-  const loadDotnet = async () => {
-    try {
-      setOutput('C# ランタイムを読み込み中...\n')
-      // dotnet.jsをグローバルスコープから読み込む
-      const dotnetRuntime = await (window as unknown as { 
-        getDotnetRuntime: (config: { configSrc: string }) => Promise<unknown> 
-      }).getDotnetRuntime({
-        configSrc: 'https://cdn.jsdelivr.net/npm/@dotnet/runtime@8.0.0/dotnet.js'
-      })
-      dotnetRef.current = dotnetRuntime
-      setDotnetReady(true)
-      setOutput('C# ランタイムの準備が完了しました\n')
-    } catch (error) {
-      setOutput(`C# ランタイムの読み込みに失敗しました: ${error}\n\n` +
-                'ブラウザ上でC#を実行するには、.NET WebAssemblyランタイムが必要です。\n' +
-                '現在、簡易的な実装のため、完全なC#コンパイルと実行はサポートされていません。')
-      setDotnetReady(false)
     }
   }
 
@@ -228,70 +199,54 @@ output
   }
 
   const runCSharp = async () => {
-    // For demonstration purposes, we'll use a simple pattern matching approach
-    // Real C# execution would require a backend service or full .NET WASM runtime
-    
-    // Try to initialize .NET runtime (will likely fail without proper setup)
-    if (!dotnetReady) {
-      await loadDotnet()
-    }
-
+    // Real C# execution using online compilation API
     try {
-      // 簡易的なC#実行シミュレーション
-      // Console.WriteLineの出力をキャプチャ
-      const outputs: string[] = []
+      setOutput('C#コードをコンパイル中...\n')
       
-      // より正確なパターンマッチングのため、改行で分割して各行を処理
-      const lines = code.split('\n')
-      for (const line of lines) {
-        const writeLineMatch = line.match(/Console\.WriteLine\s*\((.+)\)\s*;?/)
-        if (writeLineMatch) {
-          try {
-            const arg = writeLineMatch[1].trim()
-            
-            // 文字列リテラルの場合
-            if (arg.startsWith('"') && arg.endsWith('"')) {
-              outputs.push(arg.slice(1, -1))
-            }
-            // 補間文字列の基本的な処理
-            else if (arg.startsWith('$"')) {
-              const str = arg.replace(/^\$"|"$/g, '')
-              // 変数名の抽出と仮の値での置換
-              // 特別なケース: sum変数
-              const result = str.replace(/\{([^}]+)\}/g, (_, varExpr) => {
-                if (varExpr.trim() === 'sum') {
-                  return '15'
-                }
-                return `[${varExpr}]`
-              })
-              outputs.push(result)
-            }
-            // Greet関数などの呼び出し
-            else if (arg.match(/^Greet\s*\(/)) {
-              const nameMatch = arg.match(/Greet\s*\(\s*"([^"]+)"\s*\)/)
-              if (nameMatch) {
-                outputs.push(`Hello, ${nameMatch[1]}!`)
-              }
-            }
-          } catch {
-            // エラーは無視
-          }
-        }
+      // Use Wandbox API for C# compilation and execution
+      const response = await fetch('https://wandbox.org/api/compile.json', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          compiler: 'mono-head',
+          code: code,
+          options: '',
+          stdin: '',
+          'compiler-option-raw': '',
+          'runtime-option-raw': ''
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`APIエラー: ${response.status}`)
       }
 
-      if (outputs.length > 0) {
+      const result = await response.json()
+      
+      if (result.compiler_error || result.program_error) {
+        const errors = result.compiler_error || result.program_error
         setOutput(
-          '実行結果（シミュレーション）:\n' +
-          outputs.join('\n') +
-          '\n\n注意: これは簡易的なシミュレーションです。\n' +
-          '完全なC#実行には.NET WebAssemblyランタイムまたはバックエンドサーバーが必要です。'
+          'エラー:\n' +
+          errors +
+          '\n\n注意: このエラーは実際のC#コンパイラ(Mono)からのものです。'
         )
       } else {
-        setOutput('実行完了（出力なし）\n\n注意: これは簡易的なシミュレーションです。')
+        const output = result.program_output || result.program_message || '(出力なし)'
+        setOutput(
+          '実行結果:\n' +
+          output +
+          '\n\n注意: Wandbox APIを使用して実際にコンパイル・実行されました。'
+        )
       }
     } catch (error) {
       const err = error as Error
-      setOutput(`実行エラー: ${err.message}`)
+      setOutput(
+        `実行エラー: ${err.message}\n\n` +
+        'オンラインコンパイルAPIへの接続に失敗しました。\n' +
+        'ネットワーク接続を確認してください。'
+      )
     }
   }
 
@@ -407,20 +362,7 @@ output
             </Box>
           )}
 
-          {language === 'csharp' && !dotnetReady && (
-            <Box
-              bg="yellow.100"
-              color="yellow.800"
-              p={2}
-              rounded="md"
-              fontSize="sm"
-              mb={2}
-            >
-              C# ランタイムを初期化しています...
-            </Box>
-          )}
-
-          {language === 'csharp' && dotnetReady && (
+          {language === 'csharp' && (
             <Box
               bg="blue.100"
               color="blue.800"
@@ -429,7 +371,7 @@ output
               fontSize="sm"
               mb={2}
             >
-              注意: 簡易的なC#シミュレーション実行です。完全な.NET機能は利用できません。
+              注意: Wandbox APIを使用してC#コードを実際にコンパイル・実行します。
             </Box>
           )}
         </Box>
