@@ -19,7 +19,4 @@ csharp-wasm/bin/
 csharp-wasm/obj/
 
 # WASM outputs (built by GitHub Actions)
-# Uncomment if you want to commit WASM files manually
-# public/wasm/*.wasm
-# public/wasm/*.js
-# public/wasm/*.dat
+public/wasm/net8.0/
