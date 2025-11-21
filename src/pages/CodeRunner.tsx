@@ -13,7 +13,7 @@ import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
-import { getWasmFilePath, WASM_CONFIG } from '../constants/wasmConstants'
+import { WASM_CONFIG } from '../constants/wasmConstants'
 
 /**
  * CodeRunner Component
@@ -214,7 +214,7 @@ output
       
       // BASE_URL includes trailing slash (e.g., '/web-tools/' or '/')
       const baseUrl = import.meta.env.BASE_URL
-      const wasmPath = getWasmFilePath(baseUrl)
+      const wasmPath = `${baseUrl}${WASM_CONFIG.OUTPUT_DIR}/dotnet.native.wasm`
       
       // Check if WASM files are available
       try {
@@ -236,7 +236,7 @@ output
           '【パス情報】\n' +
           `- BASE_URL: ${baseUrl}\n` +
           `- 読み込みパス: ${wasmPath}\n` +
-          `- 配置先: public/${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}\n\n` +
+          `- 配置先: public/${WASM_CONFIG.OUTPUT_DIR}/\n\n` +
           'WASMファイルをビルドするには：\n' +
           '1. csharp-wasm.config.json のbuildVersionを更新\n' +
           '2. GitHub Actionsが自動的にビルドを実行\n' +
@@ -247,9 +247,36 @@ output
         return
       }
 
-      // TODO: Load actual WASM runtime here
-      // This will be implemented once the C# WASM project is built
-      wasmRef.current = { /* WASM runtime will be loaded here */ }
+      // Load Blazor WebAssembly runtime
+      const blazorScript = document.createElement('script')
+      blazorScript.src = `${baseUrl}${WASM_CONFIG.OUTPUT_DIR}/blazor.webassembly.js`
+      blazorScript.async = true
+      blazorScript.type = 'module'
+      
+      // Store the runtime reference when Blazor is ready
+      await new Promise<void>((resolve, reject) => {
+        blazorScript.onload = async () => {
+          try {
+            // Wait a bit for Blazor to initialize
+            await new Promise(r => setTimeout(r, 1000))
+            
+            // Store the dotnet runtime reference
+            if ((window as unknown as { getDotnetRuntime?: () => unknown }).getDotnetRuntime) {
+              wasmRef.current = (window as unknown as { getDotnetRuntime: () => unknown }).getDotnetRuntime()
+            } else {
+              wasmRef.current = { loaded: true }
+            }
+            
+            resolve()
+          } catch (err) {
+            reject(err)
+          }
+        }
+        blazorScript.onerror = () => reject(new Error('Failed to load Blazor script'))
+      })
+      
+      document.head.appendChild(blazorScript)
+      
       setWasmReady(true)
       setOutput('C# WebAssemblyランタイムの準備が完了しました\n')
     } catch (error) {
@@ -273,22 +300,31 @@ output
     try {
       setOutput('C#コードを実行中（WASM版）...\n')
       
-      // TODO: Implement actual WASM execution with Roslyn compilation
-      // For now, show that WASM is loaded and ready
-      setOutput(`C# WASM実行機能を準備中です。
+      // Check if the WASM runtime has the CompileAndRun function
+      const exports = (window as unknown as { CSharpRunner?: { CompileAndRun?: (code: string) => string } }).CSharpRunner
+      
+      if (exports && exports.CompileAndRun) {
+        // Call the C# function
+        const result = exports.CompileAndRun(code)
+        setOutput(result)
+      } else {
+        // Fallback: show that runtime is loaded but function is not available yet
+        setOutput(`C# WASM実行機能を準備中です。
 
 ✓ WebAssemblyランタイムは正常にロードされました
-✓ dotnet.wasmファイルが利用可能です
+✓ dotnet.native.wasmファイルが利用可能です
 
-現在、Roslynコンパイラの統合作業を進めています。
-完全な実装が完了するまでお待ちください。
+注意: C#関数のエクスポートが完了していません。
+ランタイムの初期化を待ってから再度お試しください。
 
 【技術情報】
-- WASMファイル: ${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}
-- ランタイム状態: ${wasmReady ? '準備完了' : '初期化中'}`)
+- WASMファイル: ${WASM_CONFIG.OUTPUT_DIR}/
+- ランタイム状態: ${wasmReady ? '準備完了' : '初期化中'}
+- エクスポート状態: ${exports ? 'あり' : 'なし'}`)
+      }
     } catch (error) {
       const err = error as Error
-      setOutput(`実行エラー: ${err.message}`)
+      setOutput(`実行エラー: ${err.message}\n${err.stack || ''}`)
     }
   }
 
