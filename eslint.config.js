@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'public', 'node_modules', '*.config.js', '*.config.ts', 'scripts']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -18,6 +18,31 @@ export default defineConfig([
     languageOptions: {
       ecmaVersion: 2020,
       globals: globals.browser,
+    },
+    rules: {
+      // Restrict identifiers to ASCII characters only to prevent confusing Unicode identifiers
+      // This prevents issues like "varあ" being treated as a valid identifier name
+      'id-match': ['error', '^[a-zA-Z0-9_$]+$', {
+        properties: true,
+        classFields: true,
+        onlyDeclarations: false,
+      }],
+    },
+  },
+  {
+    files: ['**/*.{js,jsx}'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      ecmaVersion: 2020,
+      globals: globals.browser,
+    },
+    rules: {
+      // Restrict identifiers to ASCII characters only to prevent confusing Unicode identifiers
+      'id-match': ['error', '^[a-zA-Z0-9_$]+$', {
+        properties: true,
+        classFields: true,
+        onlyDeclarations: false,
+      }],
     },
   },
 ])
