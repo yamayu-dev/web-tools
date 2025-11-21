@@ -13,6 +13,7 @@ import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useColorMode } from '../components/ColorModeProvider'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
+import { getWasmFilePath } from '../constants/wasmConstants'
 
 /**
  * CodeRunner Component
@@ -216,9 +217,17 @@ output
       // Check if WASM files are available
       try {
         // BASE_URL includes trailing slash (e.g., '/web-tools/' or '/')
-        const wasmPath = `${import.meta.env.BASE_URL}wasm/CSharpRunner.wasm`
+        const wasmPath = getWasmFilePath(import.meta.env.BASE_URL)
         const response = await fetch(wasmPath)
+        
+        // Check if the response is actually a WASM file, not HTML from SPA routing
         if (!response.ok) {
+          throw new Error('WASM files not found')
+        }
+        
+        const contentType = response.headers.get('content-type')
+        const isWasmContentType = contentType && contentType.toLowerCase().includes('application/wasm')
+        if (!isWasmContentType) {
           throw new Error('WASM files not found')
         }
       } catch {
