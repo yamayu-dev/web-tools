@@ -231,8 +231,14 @@ output
           throw new Error('WASM files not found')
         }
       } catch {
+        const wasmPath = getWasmFilePath(import.meta.env.BASE_URL)
+        const baseUrl = import.meta.env.BASE_URL
         setOutput(
           'C# WebAssemblyファイルが見つかりません。\n\n' +
+          '【パス情報】\n' +
+          `- BASE_URL: ${baseUrl}\n` +
+          `- 読み込みパス: ${wasmPath}\n` +
+          `- 配置先: public/wasm/dotnet.wasm\n\n` +
           'WASMファイルをビルドするには：\n' +
           '1. csharp-wasm.config.json のbuildVersionを更新\n' +
           '2. GitHub Actionsが自動的にビルドを実行\n' +
