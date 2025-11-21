@@ -25,7 +25,6 @@ import { getWasmFilePath, WASM_CONFIG } from '../constants/wasmConstants'
  */
 
 type Language = 'typescript' | 'python' | 'csharp'
-type CSharpExecutionMode = 'api' | 'wasm'
 
 // サンプルコード
 const SAMPLE_CODE = {
@@ -84,7 +83,6 @@ export default function CodeRunner() {
   const [output, setOutput] = useState('')
   const [isRunning, setIsRunning] = useState(false)
   const [pyodideReady, setPyodideReady] = useState(false)
-  const [csharpMode, setCSharpMode] = useState<CSharpExecutionMode>('api')
   const [wasmReady, setWasmReady] = useState(false)
   const pyodideRef = useRef<unknown>(null)
   const wasmRef = useRef<unknown>(null)
@@ -106,10 +104,10 @@ export default function CodeRunner() {
 
   // C# WASMランタイムの初期化
   useEffect(() => {
-    if (language === 'csharp' && csharpMode === 'wasm' && !wasmReady) {
+    if (language === 'csharp' && !wasmReady) {
       loadCSharpWasm()
     }
-  }, [language, csharpMode, wasmReady])
+  }, [language, wasmReady])
 
   const loadPyodide = async () => {
     try {
@@ -261,84 +259,34 @@ output
   }
 
   const runCSharp = async () => {
-    // Real C# execution using online compilation API or WASM
-    if (csharpMode === 'wasm') {
-      await runCSharpWasm()
-    } else {
-      await runCSharpApi()
-    }
+    // C# execution using WASM
+    await runCSharpWasm()
   }
 
   const runCSharpWasm = async () => {
     if (!wasmReady) {
-      setOutput('C# WebAssemblyランタイムが準備できていません。\n初期化を待つか、API版に切り替えてください。')
+      setOutput('C# WebAssemblyランタイムが準備できていません。\n初期化を待ってください。')
       return
     }
 
     try {
       setOutput('C#コードを実行中（WASM版）...\n')
       
-      // TODO: Implement actual WASM execution
-      // This is a placeholder for when the WASM runtime is implemented
+      // TODO: Implement actual WASM execution with Roslyn compilation
+      // For now, show that WASM is loaded and ready
       setOutput(
-        'C# WASM実行機能は実装中です。\n\n' +
-        '現在、WASMランタイムの統合作業を進めています。\n' +
-        '完全な実装までは、API版をご利用ください。'
+        'C# WASM実行機能を準備中です。\n\n' +
+        '✓ WebAssemblyランタイムは正常にロードされました\n' +
+        '✓ dotnet.wasmファイルが利用可能です\n\n' +
+        '現在、Roslynコンパイラの統合作業を進めています。\n' +
+        '完全な実装が完了するまでお待ちください。\n\n' +
+        '【技術情報】\n' +
+        `- WASMファイル: ${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}\n` +
+        `- ランタイム状態: ${wasmReady ? '準備完了' : '初期化中'}`
       )
     } catch (error) {
       const err = error as Error
       setOutput(`実行エラー: ${err.message}`)
-    }
-  }
-
-  const runCSharpApi = async () => {
-    try {
-      setOutput('C#コードをコンパイル中（API版）...\n')
-      
-      // Use Wandbox API for C# compilation and execution
-      const response = await fetch('https://wandbox.org/api/compile.json', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          compiler: 'mono-head',
-          code: code,
-          options: '',
-          stdin: '',
-          'compiler-option-raw': '',
-          'runtime-option-raw': ''
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`APIエラー: ${response.status}`)
-      }
-
-      const result = await response.json()
-      
-      if (result.compiler_error || result.program_error) {
-        const errors = result.compiler_error || result.program_error
-        setOutput(
-          'エラー:\n' +
-          errors +
-          '\n\n注意: このエラーは実際のC#コンパイラ(Mono)からのものです。'
-        )
-      } else {
-        const output = result.program_output || result.program_message || '(出力なし)'
-        setOutput(
-          '実行結果:\n' +
-          output +
-          '\n\n注意: Wandbox APIを使用して実際にコンパイル・実行されました。'
-        )
-      }
-    } catch (error) {
-      const err = error as Error
-      setOutput(
-        `実行エラー: ${err.message}\n\n` +
-        'オンラインコンパイルAPIへの接続に失敗しました。\n' +
-        'ネットワーク接続を確認してください。'
-      )
     }
   }
 
@@ -411,35 +359,6 @@ output
               <option value="csharp">C#</option>
             </select>
 
-            {/* C#実行モード切り替え */}
-            {language === 'csharp' && (
-              <select
-                key={`csharp-mode-${colorMode}`}
-                value={csharpMode}
-                onChange={(e) => setCSharpMode(e.target.value as CSharpExecutionMode)}
-                style={{
-                  fontSize: '14px',
-                  padding: '6px 12px',
-                  borderRadius: '6px',
-                  backgroundColor: colorStyles.bg.primary,
-                  color: colorStyles.text.primary,
-                  border: `1px solid ${colorStyles.border.default}`,
-                  cursor: 'pointer',
-                  height: '32px',
-                  width: '150px'
-                }}
-                onMouseOver={(e) => {
-                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
-                }}
-                onMouseOut={(e) => {
-                  (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
-                }}
-              >
-                <option value="api">API版</option>
-                <option value="wasm">WASM版</option>
-              </select>
-            )}
-
             {/* 実行ボタン */}
             <Button
               leftIcon={<Play size={16} />}
@@ -483,20 +402,7 @@ output
             </Box>
           )}
 
-          {language === 'csharp' && csharpMode === 'api' && (
-            <Box
-              bg="blue.100"
-              color="blue.800"
-              p={2}
-              rounded="md"
-              fontSize="sm"
-              mb={2}
-            >
-              実行モード: API版 - Wandbox APIを使用してC#コードを実際にコンパイル・実行します。
-            </Box>
-          )}
-
-          {language === 'csharp' && csharpMode === 'wasm' && !wasmReady && (
+          {language === 'csharp' && !wasmReady && (
             <Box
               bg="yellow.100"
               color="yellow.800"
@@ -509,7 +415,7 @@ output
             </Box>
           )}
 
-          {language === 'csharp' && csharpMode === 'wasm' && wasmReady && (
+          {language === 'csharp' && wasmReady && (
             <Box
               bg="green.100"
               color="green.800"
