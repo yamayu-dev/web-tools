@@ -1,5 +1,6 @@
 {
   "buildVersion": "1.0.0",
   "wasmEnabled": true,
-  "description": "Configuration for C# WebAssembly execution. Increment buildVersion to trigger rebuild."
+  "description": "Configuration for C# WebAssembly execution. Increment buildVersion to trigger rebuild.",
+  "_note": "WASM output path and filename are defined in src/constants/wasmConstants.ts"
 }
