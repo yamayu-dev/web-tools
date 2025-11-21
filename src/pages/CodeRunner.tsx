@@ -225,7 +225,8 @@ output
         }
         
         const contentType = response.headers.get('content-type')
-        if (!contentType || !contentType.toLowerCase().includes('application/wasm')) {
+        const isWasmContentType = contentType && contentType.toLowerCase().includes('application/wasm')
+        if (!isWasmContentType) {
           throw new Error('WASM files not found')
         }
       } catch {
