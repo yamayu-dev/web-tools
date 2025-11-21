@@ -4,6 +4,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 
+      OutputPath は ../csharp-wasm.config.json の outputPath 設定と一致させること
+      現在の設定: ../public/wasm/
+    -->
     <OutputPath>../public/wasm/</OutputPath>
     <WasmBuildOnlyAfterPublish>true</WasmBuildOnlyAfterPublish>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
