@@ -218,7 +218,10 @@ output
         // BASE_URL includes trailing slash (e.g., '/web-tools/' or '/')
         const wasmPath = `${import.meta.env.BASE_URL}wasm/CSharpRunner.wasm`
         const response = await fetch(wasmPath)
-        if (!response.ok) {
+        
+        // Check if the response is actually a WASM file, not HTML from SPA routing
+        const contentType = response.headers.get('content-type')
+        if (!response.ok || !contentType || !contentType.includes('application/wasm')) {
           throw new Error('WASM files not found')
         }
       } catch {
