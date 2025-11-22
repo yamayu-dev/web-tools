@@ -26,6 +26,13 @@ import { WASM_CONFIG } from '../constants/wasmConstants'
 
 type Language = 'typescript' | 'python' | 'csharp'
 
+// C# Console method validation - valid Console methods
+const VALID_CONSOLE_METHODS = [
+  'WriteLine', 'Write', 'ReadLine', 'Read', 'ReadKey', 'Clear', 'Beep', 
+  'SetCursorPosition', 'ResetColor', 'SetOut', 'SetIn', 'SetError',
+  'OpenStandardInput', 'OpenStandardOutput', 'OpenStandardError'
+]
+
 // サンプルコード
 const SAMPLE_CODE = {
   typescript: `// TypeScriptコード例
@@ -347,12 +354,11 @@ output
           syntaxErrors.push(`行 ${lineNum}: 'Console' は大文字で始める必要があります (C# は大文字と小文字を区別します)`)
         }
         
-        // Check for invalid Console method names
-        const consoleMethodMatch = line.match(/Console\.(\w+)/)
+        // Check for invalid Console method names (only check method calls with parentheses)
+        const consoleMethodMatch = line.match(/Console\.(\w+)\s*\(/)
         if (consoleMethodMatch) {
           const methodName = consoleMethodMatch[1]
-          const validConsoleMethods = ['WriteLine', 'Write', 'ReadLine', 'Read', 'ReadKey', 'Clear', 'Beep', 'SetCursorPosition']
-          if (!validConsoleMethods.includes(methodName)) {
+          if (!VALID_CONSOLE_METHODS.includes(methodName)) {
             syntaxErrors.push(`行 ${lineNum}: 'Console.${methodName}' は存在しないメソッドです。'Console.WriteLine' などの正しいメソッド名を使用してください`)
           }
         }
