@@ -35,7 +35,7 @@ public partial class CSharpRunner
     // Helper method to add assembly reference
     private static void AddAssemblyReference(Assembly assembly, List<MetadataReference> references)
     {
-        // Skip if assembly location is available (shouldn't happen in WASM, but just in case)
+        // Try to use location if available (shouldn't happen in WASM, but just in case)
         if (!string.IsNullOrEmpty(assembly.Location))
         {
             try
@@ -43,9 +43,9 @@ public partial class CSharpRunner
                 references.Add(MetadataReference.CreateFromFile(assembly.Location));
                 return;
             }
-            catch
+            catch (Exception)
             {
-                // Fall through to WASM method
+                // Fall through to WASM method if file-based loading fails
             }
         }
         
@@ -152,9 +152,9 @@ public partial class CSharpRunner
                             AddAssemblyReference(assembly, references);
                             addedAssemblies.Add(assemblyName);
                         }
-                        catch
+                        catch (Exception)
                         {
-                            // Skip assemblies that can't be loaded
+                            // Skip assemblies that can't be loaded or don't have accessible metadata
                         }
                     }
                     
@@ -170,15 +170,16 @@ public partial class CSharpRunner
                             AddAssemblyReference(assembly, references);
                             addedAssemblies.Add(assemblyName);
                         }
-                        catch
+                        catch (Exception)
                         {
-                            // Skip assemblies that can't be loaded
+                            // Skip assemblies that can't be loaded or don't have accessible metadata
                         }
                     }
                     
                     // Create script options with the references we collected
-                    // Set metadata resolver and other options first, then references last
-                    // This prevents Roslyn from trying to auto-load assemblies without locations in WASM
+                    // WithReferences replaces (not appends) the default references, ensuring only
+                    // our manually created references are used, preventing Roslyn from trying to
+                    // auto-load assemblies without locations in WASM
                     var scriptOptions = ScriptOptions.Default
                         .WithMetadataResolver(new WasmMetadataReferenceResolver())
                         .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text")
