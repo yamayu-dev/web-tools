@@ -76,20 +76,6 @@ public partial class CSharpRunner
                     output.AppendLine();
                     output.AppendLine("この制限はRoslynライブラリ自体の問題であり、");
                     output.AppendLine("将来のバージョンで改善される可能性があります。");
-                    
-                    return output.ToString();
-                }
-                catch (CompilationErrorException ex)
-                {
-                    output.AppendLine("コンパイルエラー:");
-                    foreach (var diagnostic in ex.Diagnostics)
-                    {
-                        output.AppendLine($"  {diagnostic}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    output.AppendLine($"実行エラー: {ex.Message}");
                 }
                 finally
                 {
