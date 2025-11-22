@@ -51,9 +51,14 @@ public partial class CSharpRunner
                 var span = new ReadOnlySpan<byte>(blob, length);
                 var bytes = span.ToArray();
                 
-                // Create metadata reference from the assembly bytes  
-                // Don't provide filePath to avoid "assembly without location" errors
-                var reference = MetadataReference.CreateFromImage(bytes);
+                // Create metadata reference from the assembly bytes
+                // Use ImmutableArray and explicitly pass filePath: null to indicate no physical location
+                var immutableBytes = ImmutableArray.Create(bytes);
+                var reference = MetadataReference.CreateFromImage(
+                    immutableBytes,
+                    properties: default,
+                    documentation: null,
+                    filePath: null);
                 
                 references.Add(reference);
             }
