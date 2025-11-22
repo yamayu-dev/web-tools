@@ -4,6 +4,8 @@ using System.Runtime.InteropServices.JavaScript;
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
+using System.Reflection;
+using Microsoft.CodeAnalysis;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 await builder.Build().RunAsync();
@@ -27,9 +29,46 @@ public partial class CSharpRunner
                 try
                 {
                     // Execute the C# code using Roslyn scripting
-                    var scriptOptions = ScriptOptions.Default
-                        .WithReferences(typeof(Console).Assembly)
-                        .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
+                    // In WebAssembly, assemblies are loaded in memory without a file location
+                    // We need to explicitly add references to commonly used assemblies
+                    var references = new List<MetadataReference>();
+                    
+                    // Add references to common assemblies that are needed for most C# code
+                    var commonAssemblies = new[]
+                    {
+                        typeof(object).Assembly,                    // System.Private.CoreLib
+                        typeof(Console).Assembly,                   // System.Console
+                        typeof(Enumerable).Assembly,                // System.Linq
+                        typeof(System.Collections.Generic.List<>).Assembly // System.Collections
+                    };
+                    
+                    foreach (var assembly in commonAssemblies)
+                    {
+                        try
+                        {
+                            if (!assembly.IsDynamic && !string.IsNullOrEmpty(assembly.Location))
+                            {
+                                references.Add(MetadataReference.CreateFromFile(assembly.Location));
+                            }
+                        }
+                        catch (IOException)
+                        {
+                            // Assembly file not accessible, skip it
+                        }
+                        catch (ArgumentException)
+                        {
+                            // Invalid assembly location, skip it
+                        }
+                    }
+                    
+                    // If no references were added (WASM environment), don't use WithReferences
+                    // This will use default references which may work better in WASM
+                    var scriptOptions = references.Count > 0
+                        ? ScriptOptions.Default
+                            .WithReferences(references)
+                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text")
+                        : ScriptOptions.Default
+                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
                     
                     var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
                     
