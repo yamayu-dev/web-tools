@@ -26,6 +26,15 @@ import { WASM_CONFIG } from '../constants/wasmConstants'
 
 type Language = 'typescript' | 'python' | 'csharp'
 
+// WASM runtime interface
+interface WasmRuntime {
+  runtime: unknown
+  CSharpRunner: {
+    CompileAndRun: (code: string) => string
+  }
+  loaded: boolean
+}
+
 // サンプルコード
 const SAMPLE_CODE = {
   typescript: `// TypeScriptコード例
@@ -85,7 +94,7 @@ export default function CodeRunner() {
   const [pyodideReady, setPyodideReady] = useState(false)
   const [wasmReady, setWasmReady] = useState(false)
   const pyodideRef = useRef<unknown>(null)
-  const wasmRef = useRef<unknown>(null)
+  const wasmRef = useRef<WasmRuntime | null>(null)
   const colorStyles = useColorStyles()
   const { colorMode } = useColorMode()
   const { showToast } = useToast()
@@ -297,11 +306,7 @@ output
     try {
       setOutput('C#コードを実行中...\n')
       
-      // Check if we have the WASM runtime with C# execution capability
-      const wasmRuntime = wasmRef.current as { 
-        CSharpRunner?: { CompileAndRun: (code: string) => string },
-        loaded?: boolean 
-      }
+      const wasmRuntime = wasmRef.current
       
       if (wasmRuntime?.CSharpRunner?.CompileAndRun) {
         // Execute using the actual WASM runtime with Roslyn
