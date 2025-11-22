@@ -355,6 +355,35 @@ output
             syntaxErrors.push(`行 ${lineNum}: 変数宣言には型指定が必要です (例: int ${varName} = ...)`)
           }
         }
+        
+        // Check for invalid identifiers (non-ASCII characters)
+        const identifierMatch = line.match(/\b(var|int|string|double|float|bool|char|decimal|long|short|byte)\s+([^\s=;(]+)/)
+        if (identifierMatch) {
+          const identifier = identifierMatch[2]
+          // C# identifiers must start with letter or underscore, followed by letters, digits, or underscores
+          // Only ASCII characters are allowed (no Unicode like あ, い, etc.)
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+            syntaxErrors.push(`行 ${lineNum}: 不正な識別子 '${identifier}' - 識別子にはASCII文字、数字、アンダースコアのみ使用できます`)
+          }
+        }
+        
+        // Check for invalid identifiers in foreach loops
+        const foreachMatch = line.match(/foreach\s*\(\s*(\w+)\s+([^\s]+)\s+in/)
+        if (foreachMatch) {
+          const identifier = foreachMatch[2]
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+            syntaxErrors.push(`行 ${lineNum}: 不正な識別子 '${identifier}' - 識別子にはASCII文字、数字、アンダースコアのみ使用できます`)
+          }
+        }
+        
+        // Check for invalid method/function names
+        const methodMatch = line.match(/static\s+\w+\s+([^\s(]+)\s*\(/)
+        if (methodMatch) {
+          const identifier = methodMatch[1]
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+            syntaxErrors.push(`行 ${lineNum}: 不正なメソッド名 '${identifier}' - メソッド名にはASCII文字、数字、アンダースコアのみ使用できます`)
+          }
+        }
       }
       
       // If there are syntax errors, report them
