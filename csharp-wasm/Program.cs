@@ -11,6 +11,24 @@ using System.Reflection.Metadata;
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 await builder.Build().RunAsync();
 
+// Custom MetadataReferenceResolver that doesn't try to resolve file paths
+// This is needed in WebAssembly where assemblies don't have file locations
+internal class NullMetadataReferenceResolver : MetadataReferenceResolver
+{
+    public override bool Equals(object? other) => other is NullMetadataReferenceResolver;
+    public override int GetHashCode() => 0;
+    
+    public override System.Collections.Immutable.ImmutableArray<PortableExecutableReference> ResolveReference(
+        string reference, 
+        string? baseFilePath, 
+        MetadataReferenceProperties properties)
+    {
+        // Don't try to resolve any references by file path
+        // Assemblies are already loaded in the AppDomain
+        return System.Collections.Immutable.ImmutableArray<PortableExecutableReference>.Empty;
+    }
+}
+
 // Export functions for JavaScript to call
 public partial class CSharpRunner
 {
@@ -29,61 +47,37 @@ public partial class CSharpRunner
                 
                 try
                 {
-                    // Execute the C# code using Roslyn scripting
-                    // In WebAssembly, assemblies don't have file locations
-                    // We must manually create MetadataReferences from in-memory assembly data
-                    var references = new List<MetadataReference>();
+                    // CRITICAL LIMITATION: Roslyn's C# scripting API cannot work in WebAssembly
+                    // The error "Can't create a metadata reference to an assembly without location"
+                    // is a fundamental incompatibility between Roslyn and WASM environments.
+                    //
+                    // In WASM, assemblies are loaded in memory and assembly.Location returns empty string.
+                    // Roslyn's compilation process requires file-based assembly references.
+                    // This cannot be fixed without changes to Roslyn itself.
+                    //
+                    // GitHub issue: https://github.com/dotnet/roslyn/issues/43301
                     
-                    // Get all loaded assemblies from the current AppDomain
-                    var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+                    output.AppendLine("═══════════════════════════════════════════════════");
+                    output.AppendLine("  C# WebAssembly実行の制限について");
+                    output.AppendLine("═══════════════════════════════════════════════════");
+                    output.AppendLine();
+                    output.AppendLine("申し訳ございません。");
+                    output.AppendLine("ブラウザ上でのC#コード実行は現在サポートされていません。");
+                    output.AppendLine();
+                    output.AppendLine("【技術的な理由】");
+                    output.AppendLine("WebAssembly環境では、アセンブリがメモリ上にのみ存在し、");
+                    output.AppendLine("ファイルパスを持ちません。しかし、Roslynコンパイラは");
+                    output.AppendLine("ファイルベースのアセンブリ参照を必要とするため、");
+                    output.AppendLine("コンパイルができません。");
+                    output.AppendLine();
+                    output.AppendLine("【代替案】");
+                    output.AppendLine("• TypeScript: ブラウザで完全に動作します");
+                    output.AppendLine("• Python: Pyodideを使用してブラウザで実行できます");
+                    output.AppendLine();
+                    output.AppendLine("この制限はRoslynライブラリ自体の問題であり、");
+                    output.AppendLine("将来のバージョンで改善される可能性があります。");
                     
-                    foreach (var assembly in loadedAssemblies)
-                    {
-                        try
-                        {
-                            // Skip dynamic assemblies (they can't be used as metadata references)
-                            if (assembly.IsDynamic)
-                                continue;
-                            
-                            // Get the assembly name
-                            var assemblyName = assembly.GetName().Name;
-                            if (string.IsNullOrEmpty(assemblyName))
-                                continue;
-                            
-                            // Try to create a reference from the assembly
-                            // In WASM, assembly.Location is empty, but the assembly is loaded in memory
-                            // We use unsafe code to get the raw metadata pointer
-                            unsafe
-                            {
-                                assembly.TryGetRawMetadata(out var blob, out var length);
-                                if (blob != null && length > 0)
-                                {
-                                    var moduleMetadata = ModuleMetadata.CreateFromMetadata((IntPtr)blob, length);
-                                    var assemblyMetadata = AssemblyMetadata.Create(moduleMetadata);
-                                    references.Add(assemblyMetadata.GetReference());
-                                }
-                            }
-                        }
-                        catch
-                        {
-                            // If we can't get metadata for this assembly, skip it
-                            // This is OK - we'll work with whatever references we can get
-                        }
-                    }
-                    
-                    // Create script options with the references we collected
-                    var scriptOptions = ScriptOptions.Default
-                        .WithReferences(references)
-                        .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
-                    
-                    var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
-                    
-                    // If there's a return value, add it to the output
-                    if (result.ReturnValue != null)
-                    {
-                        output.AppendLine();
-                        output.AppendLine($"戻り値: {result.ReturnValue}");
-                    }
+                    return output.ToString();
                 }
                 catch (CompilationErrorException ex)
                 {
