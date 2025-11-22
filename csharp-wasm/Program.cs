@@ -35,11 +35,18 @@ public partial class CSharpRunner
     // Helper method to add assembly reference
     private static void AddAssemblyReference(Assembly assembly, List<MetadataReference> references)
     {
-        // Try to use location if available (non-WASM scenario)
+        // Skip if assembly location is available (shouldn't happen in WASM, but just in case)
         if (!string.IsNullOrEmpty(assembly.Location))
         {
-            references.Add(MetadataReference.CreateFromFile(assembly.Location));
-            return;
+            try
+            {
+                references.Add(MetadataReference.CreateFromFile(assembly.Location));
+                return;
+            }
+            catch
+            {
+                // Fall through to WASM method
+            }
         }
         
         // In WASM, we can't use assembly.Location, but we can get raw metadata
@@ -61,6 +68,12 @@ public partial class CSharpRunner
                     filePath: null);
                 
                 references.Add(reference);
+            }
+            else
+            {
+                // If TryGetRawMetadata fails, we cannot add this assembly
+                // This should not happen for normal assemblies, but log it for debugging
+                Console.WriteLine($"Warning: Could not get raw metadata for assembly: {assembly.GetName().Name}");
             }
         }
     }
@@ -89,13 +102,63 @@ public partial class CSharpRunner
                     // Create a set to track assemblies we've already added
                     var addedAssemblies = new HashSet<string>();
                     
-                    // Load ALL non-dynamic assemblies to avoid type resolution issues
-                    // This is crucial because Roslyn might try to resolve type forwarders
-                    // and other indirect references during compilation
+                    // CRITICAL: Add the language runtime assembly FIRST
+                    // Roslyn requires this and will try to add it automatically if it's not present
+                    // In WASM, this will fail if we don't add it manually first
+                    var runtimeAssembly = typeof(object).Assembly;
+                    try
+                    {
+                        AddAssemblyReference(runtimeAssembly, references);
+                        var runtimeName = runtimeAssembly.GetName().Name;
+                        if (runtimeName != null)
+                        {
+                            addedAssemblies.Add(runtimeName);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // If we can't add the runtime assembly, compilation will fail
+                        output.AppendLine($"致命的エラー: ランタイムアセンブリを読み込めません: {ex.Message}");
+                        return output.ToString();
+                    }
+                    
+                    // Load only essential assemblies to avoid issues with assemblies that can't be referenced
+                    // In WASM, some assemblies may not have accessible metadata
+                    var essentialAssemblyNames = new[] {
+                        "System.Runtime",
+                        "System.Console",
+                        "System.Collections",
+                        "System.Linq",
+                        "System.Linq.Expressions",
+                        "netstandard"
+                    };
+                    
                     var allAssemblies = AppDomain.CurrentDomain.GetAssemblies()
                         .Where(a => !a.IsDynamic)
                         .ToList();
                     
+                    // First, add essential assemblies
+                    foreach (var assembly in allAssemblies)
+                    {
+                        var assemblyName = assembly.GetName().Name;
+                        if (assemblyName == null || !essentialAssemblyNames.Contains(assemblyName))
+                            continue;
+                            
+                        if (addedAssemblies.Contains(assemblyName))
+                            continue;
+                            
+                        try
+                        {
+                            AddAssemblyReference(assembly, references);
+                            addedAssemblies.Add(assemblyName);
+                        }
+                        catch
+                        {
+                            // Skip assemblies that can't be loaded
+                        }
+                    }
+                    
+                    // Then, add other non-dynamic assemblies for extended functionality
                     foreach (var assembly in allAssemblies)
                     {
                         var assemblyName = assembly.GetName().Name;
@@ -114,13 +177,17 @@ public partial class CSharpRunner
                     }
                     
                     // Create script options with the references we collected
+                    // Set metadata resolver and other options first, then references last
+                    // This prevents Roslyn from trying to auto-load assemblies without locations in WASM
                     var scriptOptions = ScriptOptions.Default
-                        .WithReferences(references)
+                        .WithMetadataResolver(new WasmMetadataReferenceResolver())
                         .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text")
                         .WithAllowUnsafe(true)
                         .WithCheckOverflow(false)
                         .WithFileEncoding(Encoding.UTF8)
-                        .WithMetadataResolver(new WasmMetadataReferenceResolver());
+                        .WithEmitDebugInformation(false)
+                        .WithOptimizationLevel(Microsoft.CodeAnalysis.OptimizationLevel.Release)
+                        .WithReferences(references);  // Set references LAST to override defaults
                     
                     var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
                     
