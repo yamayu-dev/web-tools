@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
+using System.Reflection.Metadata;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 await builder.Build().RunAsync();
@@ -30,39 +31,57 @@ public partial class CSharpRunner
                 {
                     // Execute the C# code using Roslyn scripting
                     // In WebAssembly, assemblies are loaded in memory without file locations
-                    // To avoid metadata reference errors, we'll try compilation without explicit references
+                    // We need to create MetadataReferences from in-memory assembly bytes
                     
-                    try
+                    var references = new List<MetadataReference>();
+                    
+                    // Get key assemblies needed for basic C# code
+                    var coreAssemblies = new[]
                     {
-                        // First attempt: Try with minimal script options
-                        // Only add imports, no explicit references
-                        var scriptOptions = ScriptOptions.Default
-                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text")
-                            .WithReferences(AppDomain.CurrentDomain.GetAssemblies().Where(a => !a.IsDynamic));
-                        
-                        var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
-                        
-                        // If there's a return value, add it to the output
-                        if (result.ReturnValue != null)
+                        typeof(object).Assembly,           // System.Private.CoreLib
+                        typeof(Console).Assembly,          // System.Console
+                        typeof(Enumerable).Assembly,       // System.Linq
+                        typeof(List<>).Assembly            // System.Collections
+                    };
+                    
+                    // Try to create metadata references from loaded assemblies
+                    foreach (var assembly in coreAssemblies)
+                    {
+                        try
                         {
-                            output.AppendLine();
-                            output.AppendLine($"戻り値: {result.ReturnValue}");
+                            if (assembly.IsDynamic)
+                                continue;
+                                
+                            // In WASM, we can't use assembly.Location, but we can get raw metadata
+                            // Using unsafe code to access the assembly bytes
+                            unsafe
+                            {
+                                if (assembly.TryGetRawMetadata(out byte* blob, out int length))
+                                {
+                                    var span = new ReadOnlySpan<byte>(blob, length);
+                                    var bytes = span.ToArray();
+                                    references.Add(MetadataReference.CreateFromImage(bytes));
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // If we can't get metadata for this assembly, skip it
                         }
                     }
-                    catch (ArgumentException ex) when (ex.Message.Contains("location"))
+                    
+                    // Create script options with the references we collected
+                    var scriptOptions = ScriptOptions.Default
+                        .WithReferences(references)
+                        .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
+                    
+                    var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
+                    
+                    // If there's a return value, add it to the output
+                    if (result.ReturnValue != null)
                     {
-                        // If metadata reference error occurs, try alternative approach
-                        // Create script without any references and let it fail with better error
-                        var scriptOptions = ScriptOptions.Default
-                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
-                        
-                        var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
-                        
-                        if (result.ReturnValue != null)
-                        {
-                            output.AppendLine();
-                            output.AppendLine($"戻り値: {result.ReturnValue}");
-                        }
+                        output.AppendLine();
+                        output.AppendLine($"戻り値: {result.ReturnValue}");
                     }
                 }
                 catch (CompilationErrorException ex)
