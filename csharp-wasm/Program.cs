@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
+using System.Reflection.Metadata;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 await builder.Build().RunAsync();
@@ -29,46 +30,51 @@ public partial class CSharpRunner
                 try
                 {
                     // Execute the C# code using Roslyn scripting
-                    // In WebAssembly, assemblies are loaded in memory without a file location
-                    // We need to explicitly add references to commonly used assemblies
+                    // In WebAssembly, assemblies don't have file locations
+                    // We must manually create MetadataReferences from in-memory assembly data
                     var references = new List<MetadataReference>();
                     
-                    // Add references to common assemblies that are needed for most C# code
-                    var commonAssemblies = new[]
-                    {
-                        typeof(object).Assembly,                    // System.Private.CoreLib
-                        typeof(Console).Assembly,                   // System.Console
-                        typeof(Enumerable).Assembly,                // System.Linq
-                        typeof(System.Collections.Generic.List<>).Assembly // System.Collections
-                    };
+                    // Get all loaded assemblies from the current AppDomain
+                    var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
                     
-                    foreach (var assembly in commonAssemblies)
+                    foreach (var assembly in loadedAssemblies)
                     {
                         try
                         {
-                            if (!assembly.IsDynamic && !string.IsNullOrEmpty(assembly.Location))
+                            // Skip dynamic assemblies (they can't be used as metadata references)
+                            if (assembly.IsDynamic)
+                                continue;
+                            
+                            // Get the assembly name
+                            var assemblyName = assembly.GetName().Name;
+                            if (string.IsNullOrEmpty(assemblyName))
+                                continue;
+                            
+                            // Try to create a reference from the assembly
+                            // In WASM, assembly.Location is empty, but the assembly is loaded in memory
+                            // We use unsafe code to get the raw metadata pointer
+                            unsafe
                             {
-                                references.Add(MetadataReference.CreateFromFile(assembly.Location));
+                                assembly.TryGetRawMetadata(out var blob, out var length);
+                                if (blob != null && length > 0)
+                                {
+                                    var moduleMetadata = ModuleMetadata.CreateFromMetadata((IntPtr)blob, length);
+                                    var assemblyMetadata = AssemblyMetadata.Create(moduleMetadata);
+                                    references.Add(assemblyMetadata.GetReference());
+                                }
                             }
                         }
-                        catch (IOException)
+                        catch
                         {
-                            // Assembly file not accessible, skip it
-                        }
-                        catch (ArgumentException)
-                        {
-                            // Invalid assembly location, skip it
+                            // If we can't get metadata for this assembly, skip it
+                            // This is OK - we'll work with whatever references we can get
                         }
                     }
                     
-                    // If no references were added (WASM environment), don't use WithReferences
-                    // This will use default references which may work better in WASM
-                    var scriptOptions = references.Count > 0
-                        ? ScriptOptions.Default
-                            .WithReferences(references)
-                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text")
-                        : ScriptOptions.Default
-                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
+                    // Create script options with the references we collected
+                    var scriptOptions = ScriptOptions.Default
+                        .WithReferences(references)
+                        .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
                     
                     var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
                     
