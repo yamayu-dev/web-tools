@@ -51,9 +51,13 @@ public partial class CSharpRunner
                                 references.Add(MetadataReference.CreateFromFile(assembly.Location));
                             }
                         }
-                        catch
+                        catch (IOException)
                         {
-                            // If we can't add this assembly, continue with others
+                            // Assembly file not accessible, skip it
+                        }
+                        catch (ArgumentException)
+                        {
+                            // Invalid assembly location, skip it
                         }
                     }
                     
