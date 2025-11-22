@@ -26,6 +26,15 @@ import { WASM_CONFIG } from '../constants/wasmConstants'
 
 type Language = 'typescript' | 'python' | 'csharp'
 
+// WASM runtime interface
+interface WasmRuntime {
+  runtime: unknown
+  CSharpRunner: {
+    CompileAndRun: (code: string) => string
+  }
+  loaded: boolean
+}
+
 // サンプルコード
 const SAMPLE_CODE = {
   typescript: `// TypeScriptコード例
@@ -85,7 +94,7 @@ export default function CodeRunner() {
   const [pyodideReady, setPyodideReady] = useState(false)
   const [wasmReady, setWasmReady] = useState(false)
   const pyodideRef = useRef<unknown>(null)
-  const wasmRef = useRef<unknown>(null)
+  const wasmRef = useRef<WasmRuntime | null>(null)
   const colorStyles = useColorStyles()
   const { colorMode } = useColorMode()
   const { showToast } = useToast()
@@ -247,9 +256,33 @@ output
         return
       }
 
-      // Mark as ready immediately - use fallback evaluator
-      // Full WASM integration can be implemented later
-      wasmRef.current = { loaded: true, fallbackMode: true }
+      // Load the dotnet runtime and initialize it
+      const dotnetJsPath = `${baseUrl}${WASM_CONFIG.OUTPUT_DIR}/dotnet.js`
+      
+      // Dynamically import the dotnet runtime
+      const { dotnet } = await import(/* @vite-ignore */ dotnetJsPath)
+      
+      // Initialize the runtime
+      const runtime = await dotnet
+        .withDiagnosticTracing(false)
+        .withApplicationEnvironment('Production')
+        .create()
+      
+      // Get the exported CSharpRunner class
+      const exports = await runtime.getAssemblyExports('CSharpRunner')
+      const csharpRunner = exports.CSharpRunner
+      
+      if (!csharpRunner || !csharpRunner.CompileAndRun) {
+        throw new Error('CSharpRunner.CompileAndRun method not found in WASM exports')
+      }
+      
+      // Store the runtime and runner
+      wasmRef.current = { 
+        runtime,
+        CSharpRunner: csharpRunner,
+        loaded: true
+      }
+      
       setWasmReady(true)
       setOutput('C# 実行環境の準備が完了しました\n')
     } catch (error) {
@@ -273,11 +306,7 @@ output
     try {
       setOutput('C#コードを実行中...\n')
       
-      // Check if we have the WASM runtime with C# execution capability
-      const wasmRuntime = wasmRef.current as { 
-        CSharpRunner?: { CompileAndRun: (code: string) => string },
-        loaded?: boolean 
-      }
+      const wasmRuntime = wasmRef.current
       
       if (wasmRuntime?.CSharpRunner?.CompileAndRun) {
         // Execute using the actual WASM runtime with Roslyn
@@ -289,15 +318,12 @@ output
           setOutput(`実行エラー: ${err.message}`)
         }
       } else {
-        // Fallback: Use C# script evaluation via eval (limited functionality)
-        // This simulates basic C# execution for common patterns
-        try {
-          const result = evaluateCSharpCode(code)
-          setOutput(result)
-        } catch (error) {
-          const err = error as Error
-          setOutput(`実行エラー: ${err.message}\n\n注意: 完全なC#実行にはWASMランタイムの再構築が必要です。`)
-        }
+        // WASM runtime not properly initialized
+        setOutput(
+          'エラー: C# WebAssemblyランタイムが正しく初期化されていません。\n\n' +
+          'C#コードの実行にはWASMランタイムが必要です。\n' +
+          'ページを再読み込みしてもう一度お試しください。'
+        )
       }
     } catch (error) {
       const err = error as Error
@@ -305,303 +331,6 @@ output
     }
   }
   
-  const evaluateCSharpCode = (csharpCode: string): string => {
-    // Enhanced C# code evaluator with better parsing
-    const output: string[] = []
-    
-    try {
-      // Basic syntax validation
-      const syntaxErrors: string[] = []
-      
-      // Check for balanced braces
-      const openBraces = (csharpCode.match(/{/g) || []).length
-      const closeBraces = (csharpCode.match(/}/g) || []).length
-      if (openBraces !== closeBraces) {
-        syntaxErrors.push(`構文エラー: 中括弧が一致しません (開き: ${openBraces}, 閉じ: ${closeBraces})`)
-      }
-      
-      // Check for balanced parentheses
-      const openParens = (csharpCode.match(/\(/g) || []).length
-      const closeParens = (csharpCode.match(/\)/g) || []).length
-      if (openParens !== closeParens) {
-        syntaxErrors.push(`構文エラー: 丸括弧が一致しません (開き: ${openParens}, 閉じ: ${closeParens})`)
-      }
-      
-      // Check for common syntax errors
-      const lines = csharpCode.split('\n')
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim()
-        const lineNum = i + 1
-        
-        // Skip empty lines and comments
-        if (!line || line.startsWith('//')) continue
-        
-        // Check for missing semicolons (basic check)
-        // Lines that should end with semicolon
-        if (line.includes('Console.WriteLine') && !line.includes(';') && !line.endsWith('{')) {
-          syntaxErrors.push(`行 ${lineNum}: セミコロンが不足している可能性があります`)
-        }
-        
-        // Check for invalid keywords or typos in common statements
-        if (line.match(/\bconsole\b/i) && !line.match(/\bConsole\b/)) {
-          syntaxErrors.push(`行 ${lineNum}: 'Console' は大文字で始める必要があります (C# は大文字と小文字を区別します)`)
-        }
-        
-        // Check for variable declarations without type or var
-        const invalidDecl = line.match(/^\s*(\w+)\s*=\s*.+;/)
-        if (invalidDecl && !line.match(/^\s*(int|string|var|double|float|bool|char|decimal|long|short|byte)\s+/)) {
-          const varName = invalidDecl[1]
-          if (!['true', 'false', 'null'].includes(varName)) {
-            syntaxErrors.push(`行 ${lineNum}: 変数宣言には型指定が必要です (例: int ${varName} = ...)`)
-          }
-        }
-      }
-      
-      // If there are syntax errors, report them
-      if (syntaxErrors.length > 0) {
-        return 'コンパイルエラー:\n' + syntaxErrors.join('\n')
-      }
-      
-      // Use the C# Scripting API approach - simulate script execution
-      // Extract and execute Console.WriteLine calls
-      const context: Record<string, unknown> = {}
-      let inMain = false
-      let bracketCount = 0
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim()
-        
-        // Track if we're inside Main method
-        if (line.includes('static void Main') || line.includes('static async Task Main')) {
-          inMain = true
-          continue
-        }
-        
-        if (inMain) {
-          // Count brackets to know when we exit Main
-          bracketCount += (line.match(/{/g) || []).length
-          bracketCount -= (line.match(/}/g) || []).length
-          
-          if (bracketCount < 0) {
-            inMain = false
-            continue
-          }
-          
-          // Handle Console.WriteLine
-          const writeLineMatch = line.match(/Console\.WriteLine\((.*?)\);/)
-          if (writeLineMatch) {
-            const expr = writeLineMatch[1].trim()
-            
-            try {
-              // Handle string interpolation $"..."
-              if (expr.startsWith('$"') && expr.endsWith('"')) {
-                let str = expr.substring(2, expr.length - 1)
-                
-                // Replace {variable} with actual values
-                str = str.replace(/\{([^}]+)\}/g, (_, varExpr) => {
-                  const cleanExpr = varExpr.trim()
-                  
-                  // Try to evaluate the expression
-                  if (context[cleanExpr] !== undefined) {
-                    return String(context[cleanExpr])
-                  }
-                  
-                  // Try to call a function
-                  if (cleanExpr.includes('(')) {
-                    const funcMatch = cleanExpr.match(/(\w+)\((.*?)\)/)
-                    if (funcMatch) {
-                      const [, funcName, args] = funcMatch
-                      // Look for the function definition
-                      const funcDef = findFunction(csharpCode, funcName)
-                      if (funcDef) {
-                        const result = evaluateFunction(funcDef, args)
-                        if (result !== null) return String(result)
-                      }
-                    }
-                  }
-                  
-                  return `{${varExpr}}`
-                })
-                
-                output.push(str)
-              }
-              // Handle regular string "..."
-              else if (expr.startsWith('"') && expr.endsWith('"')) {
-                output.push(expr.substring(1, expr.length - 1))
-              }
-              // Handle function call
-              else if (expr.includes('(')) {
-                const funcMatch = expr.match(/(\w+)\((.*?)\)/)
-                if (funcMatch) {
-                  const [, funcName, args] = funcMatch
-                  const funcDef = findFunction(csharpCode, funcName)
-                  if (funcDef) {
-                    const result = evaluateFunction(funcDef, args)
-                    if (result !== null) output.push(String(result))
-                  }
-                }
-              }
-              // Handle variable
-              else if (context[expr] !== undefined) {
-                output.push(String(context[expr]))
-              }
-            } catch {
-              // Skip evaluation errors
-            }
-          }
-          
-          // Handle variable declarations
-          const varMatch = line.match(/(?:int|string|var|double|float)\s+(\w+)\s*=\s*(.+?);/)
-          if (varMatch) {
-            const [, varName, value] = varMatch
-            try {
-              if (value.match(/^\d+$/)) {
-                context[varName] = parseInt(value, 10)
-              } else if (value.match(/^\d+\.\d+$/)) {
-                context[varName] = parseFloat(value)
-              } else if (value.startsWith('"') && value.endsWith('"')) {
-                context[varName] = value.substring(1, value.length - 1)
-              } else if (value === '0') {
-                context[varName] = 0
-              }
-            } catch {
-              // Skip
-            }
-          }
-          
-          // Handle array initialization
-          const arrayMatch = line.match(/int\[\]\s+(\w+)\s*=\s*\{([^}]+)\}/)
-          if (arrayMatch) {
-            const [, arrName, values] = arrayMatch
-            const numbers = values.split(',').map(n => parseInt(n.trim(), 10))
-            context[arrName] = numbers
-          }
-          
-          // Handle foreach loops - accumulate sum
-          if (line.includes('foreach')) {
-            const foreachMatch = line.match(/foreach\s*\(\s*\w+\s+(\w+)\s+in\s+(\w+)\s*\)/)
-            if (foreachMatch) {
-              const [, , arrayVar] = foreachMatch
-              const array = context[arrayVar] as number[]
-              if (array && Array.isArray(array)) {
-                // Look ahead for sum calculation
-                let j = i + 1
-                let loopBrackets = 1
-                while (j < lines.length && loopBrackets > 0) {
-                  const loopLine = lines[j].trim()
-                  loopBrackets += (loopLine.match(/{/g) || []).length
-                  loopBrackets -= (loopLine.match(/}/g) || []).length
-                  
-                  if (loopLine.includes('+=')) {
-                    const sumMatch = loopLine.match(/(\w+)\s*\+=\s*(\w+)/)
-                    if (sumMatch) {
-                      const [, sumVar] = sumMatch
-                      context[sumVar] = array.reduce((a, b) => a + b, 0)
-                    }
-                  }
-                  j++
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      if (output.length === 0) {
-        return '実行完了（出力なし）'
-      }
-      
-      return output.join('\n')
-    } catch (error) {
-      return `評価エラー: ${(error as Error).message}`
-    }
-  }
-  
-  const findFunction = (code: string, funcName: string): { params: string[], body: string } | null => {
-    // Find the function signature
-    const funcSignatureRegex = new RegExp(`static\\s+\\w+\\s+${funcName}\\s*\\(([^)]*)\\)\\s*\\{`, 'g')
-    const match = funcSignatureRegex.exec(code)
-    if (!match) return null
-    
-    const paramsStr = match[1]
-    
-    // Find the function body by counting braces
-    const startIdx = match.index + match[0].length
-    let braceCount = 1
-    let endIdx = startIdx
-    
-    while (endIdx < code.length && braceCount > 0) {
-      if (code[endIdx] === '{') braceCount++
-      else if (code[endIdx] === '}') braceCount--
-      endIdx++
-    }
-    
-    const body = code.substring(startIdx, endIdx - 1)
-    
-    // Extract parameter names from signature like "string name" or "int x, string y"
-    const params: string[] = []
-    if (paramsStr.trim()) {
-      const paramsList = paramsStr.split(',')
-      for (const param of paramsList) {
-        const parts = param.trim().split(/\s+/)
-        if (parts.length >= 2) {
-          params.push(parts[parts.length - 1]) // Get the last part (parameter name)
-        }
-      }
-    }
-    
-    return { params, body }
-  }
-  
-  const evaluateFunction = (funcInfo: { params: string[], body: string }, args: string): unknown => {
-    // Parse arguments
-    const argValues: string[] = []
-    if (args.trim()) {
-      // Simple argument parsing (handles strings and simple expressions)
-      const argParts = args.split(',').map(a => a.trim())
-      for (const arg of argParts) {
-        if (arg.startsWith('"') && arg.endsWith('"')) {
-          argValues.push(arg.substring(1, arg.length - 1))
-        } else {
-          argValues.push(arg)
-        }
-      }
-    }
-    
-    // Create a mapping of parameter names to argument values
-    const paramMap: Record<string, string> = {}
-    for (let i = 0; i < funcInfo.params.length && i < argValues.length; i++) {
-      paramMap[funcInfo.params[i]] = argValues[i]
-    }
-    
-    // Find return statement
-    const returnMatch = funcInfo.body.match(/return\s+(.+?);/)
-    if (returnMatch) {
-      const expr = returnMatch[1].trim()
-      
-      // Handle string interpolation
-      if (expr.startsWith('$"') && expr.endsWith('"')) {
-        let str = expr.substring(2, expr.length - 1)
-        
-        // Replace parameter references with actual argument values
-        str = str.replace(/\{(\w+)\}/g, (_, varName) => {
-          if (paramMap[varName] !== undefined) {
-            return paramMap[varName]
-          }
-          return `{${varName}}`
-        })
-        
-        return str
-      }
-      
-      // Handle string concatenation
-      if (expr.startsWith('"') && expr.includes('+')) {
-        return expr.replace(/"/g, '').replace(/\s*\+\s*/g, '')
-      }
-    }
-    
-    return null
-  }
 
   const runCode = async () => {
     setIsRunning(true)
