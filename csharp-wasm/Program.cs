@@ -102,9 +102,9 @@ public partial class CSharpRunner
                     // Create a set to track assemblies we've already added
                     var addedAssemblies = new HashSet<string>();
                     
-                    // CRITICAL: Add the language runtime assembly FIRST
+                    // CRITICAL: Try to add the language runtime assembly FIRST
                     // Roslyn requires this and will try to add it automatically if it's not present
-                    // In WASM, this will fail if we don't add it manually first
+                    // In WASM, TryGetRawMetadata may not be supported, so we'll skip if it fails
                     var runtimeAssembly = typeof(object).Assembly;
                     try
                     {
@@ -115,11 +115,11 @@ public partial class CSharpRunner
                             addedAssemblies.Add(runtimeName);
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
-                        // If we can't add the runtime assembly, compilation will fail
-                        output.AppendLine($"致命的エラー: ランタイムアセンブリを読み込めません: {ex.Message}");
-                        return output.ToString();
+                        // If we can't add the runtime assembly using TryGetRawMetadata,
+                        // continue anyway - Roslyn may still work with available references
+                        Console.WriteLine($"Warning: Could not add runtime assembly, continuing with available references");
                     }
                     
                     // Load only essential assemblies to avoid issues with assemblies that can't be referenced
