@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
 using System.Reflection;
 using Microsoft.CodeAnalysis;
+using System.Reflection.Metadata;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 await builder.Build().RunAsync();
@@ -29,46 +30,50 @@ public partial class CSharpRunner
                 try
                 {
                     // Execute the C# code using Roslyn scripting
-                    // In WebAssembly, assemblies are loaded in memory without a file location
-                    // We need to explicitly add references to commonly used assemblies
+                    // In WebAssembly, assemblies are loaded in memory without file locations
+                    // We need to create MetadataReferences from in-memory assembly bytes
+                    
                     var references = new List<MetadataReference>();
                     
-                    // Add references to common assemblies that are needed for most C# code
-                    var commonAssemblies = new[]
+                    // Get key assemblies needed for basic C# code
+                    var coreAssemblies = new[]
                     {
-                        typeof(object).Assembly,                    // System.Private.CoreLib
-                        typeof(Console).Assembly,                   // System.Console
-                        typeof(Enumerable).Assembly,                // System.Linq
-                        typeof(System.Collections.Generic.List<>).Assembly // System.Collections
+                        typeof(object).Assembly,           // System.Private.CoreLib
+                        typeof(Console).Assembly,          // System.Console
+                        typeof(Enumerable).Assembly,       // System.Linq
+                        typeof(List<>).Assembly            // System.Collections
                     };
                     
-                    foreach (var assembly in commonAssemblies)
+                    // Try to create metadata references from loaded assemblies
+                    foreach (var assembly in coreAssemblies)
                     {
                         try
                         {
-                            if (!assembly.IsDynamic && !string.IsNullOrEmpty(assembly.Location))
+                            if (assembly.IsDynamic)
+                                continue;
+                                
+                            // In WASM, we can't use assembly.Location, but we can get raw metadata
+                            // Using unsafe code to access the assembly bytes
+                            unsafe
                             {
-                                references.Add(MetadataReference.CreateFromFile(assembly.Location));
+                                if (assembly.TryGetRawMetadata(out byte* blob, out int length))
+                                {
+                                    var span = new ReadOnlySpan<byte>(blob, length);
+                                    var bytes = span.ToArray();
+                                    references.Add(MetadataReference.CreateFromImage(bytes));
+                                }
                             }
                         }
-                        catch (IOException)
+                        catch
                         {
-                            // Assembly file not accessible, skip it
-                        }
-                        catch (ArgumentException)
-                        {
-                            // Invalid assembly location, skip it
+                            // If we can't get metadata for this assembly, skip it
                         }
                     }
                     
-                    // If no references were added (WASM environment), don't use WithReferences
-                    // This will use default references which may work better in WASM
-                    var scriptOptions = references.Count > 0
-                        ? ScriptOptions.Default
-                            .WithReferences(references)
-                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text")
-                        : ScriptOptions.Default
-                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
+                    // Create script options with the references we collected
+                    var scriptOptions = ScriptOptions.Default
+                        .WithReferences(references)
+                        .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
                     
                     var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
                     
