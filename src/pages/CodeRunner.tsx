@@ -347,6 +347,16 @@ output
           syntaxErrors.push(`行 ${lineNum}: 'Console' は大文字で始める必要があります (C# は大文字と小文字を区別します)`)
         }
         
+        // Check for invalid Console method names
+        const consoleMethodMatch = line.match(/Console\.(\w+)/)
+        if (consoleMethodMatch) {
+          const methodName = consoleMethodMatch[1]
+          const validConsoleMethods = ['WriteLine', 'Write', 'ReadLine', 'Read', 'ReadKey', 'Clear', 'Beep', 'SetCursorPosition']
+          if (!validConsoleMethods.includes(methodName)) {
+            syntaxErrors.push(`行 ${lineNum}: 'Console.${methodName}' は存在しないメソッドです。'Console.WriteLine' などの正しいメソッド名を使用してください`)
+          }
+        }
+        
         // Check for variable declarations without type or var
         const invalidDecl = line.match(/^\s*(\w+)\s*=\s*.+;/)
         if (invalidDecl && !line.match(/^\s*(int|string|var|double|float|bool|char|decimal|long|short|byte)\s+/)) {
