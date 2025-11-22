@@ -21,14 +21,18 @@ csharp-wasm/obj/
 # WASM outputs (built by GitHub Actions)
 public/wasm/net8.0/
 
-# Exclude Blazor framework files (only keep essential files)
-public/wasm/*.wasm
-public/wasm/*.js
-public/wasm/*.json
-public/wasm/*.dat
-public/wasm/*.gz
+# WASM build artifacts - keep only essential runtime files
+# Exclude debug symbols and source maps
 public/wasm/*.pdb
 public/wasm/*.map
-# But keep the main WASM file and version info
-!public/wasm/dotnet.wasm
-!public/wasm/version.json
+# But allow all WASM assemblies and runtime files needed for execution
+!public/wasm/*.wasm
+!public/wasm/*.wasm.gz
+!public/wasm/*.wasm.br
+!public/wasm/*.js
+!public/wasm/*.js.gz
+!public/wasm/*.js.br
+!public/wasm/*.json
+!public/wasm/*.json.gz
+!public/wasm/*.json.br
+!public/wasm/*.dat
