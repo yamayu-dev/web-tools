@@ -309,6 +309,9 @@ output
     // Enhanced C# code evaluator with better parsing
     const output: string[] = []
     
+    // ASCII-only identifier pattern for validation
+    const ASCII_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+    
     try {
       // Basic syntax validation
       const syntaxErrors: string[] = []
@@ -359,12 +362,11 @@ output
         // Check for invalid identifiers (non-ASCII characters)
         // Note: While C# supports Unicode identifiers per spec, this fallback evaluator
         // restricts to ASCII for simpler validation. Full Unicode support requires Roslyn.
+        // The pattern intentionally captures Unicode characters so we can detect and report them.
         const identifierMatch = line.match(/\b(var|int|string|double|float|bool|char|decimal|long|short|byte)\s+([a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*)/)
         if (identifierMatch) {
           const identifier = identifierMatch[2]
-          // Validate identifier: must start with letter or underscore, followed by letters, digits, or underscores
-          // Only ASCII characters allowed
-          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+          if (!ASCII_IDENTIFIER_PATTERN.test(identifier)) {
             syntaxErrors.push(`行 ${lineNum}: 不正な識別子 '${identifier}' - 識別子にはASCII文字、数字、アンダースコアのみ使用できます`)
           }
         }
@@ -373,16 +375,17 @@ output
         const foreachMatch = line.match(/foreach\s*\(\s*([a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*)\s+([a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*)\s+in/)
         if (foreachMatch) {
           const identifier = foreachMatch[2]
-          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+          if (!ASCII_IDENTIFIER_PATTERN.test(identifier)) {
             syntaxErrors.push(`行 ${lineNum}: 不正な識別子 '${identifier}' - 識別子にはASCII文字、数字、アンダースコアのみ使用できます`)
           }
         }
         
         // Check for invalid method/function names
+        // Note: This checks static methods as they are most common in the sample patterns
         const methodMatch = line.match(/static\s+[a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*\s+([a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*)\s*\(/)
         if (methodMatch) {
           const identifier = methodMatch[1]
-          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
+          if (!ASCII_IDENTIFIER_PATTERN.test(identifier)) {
             syntaxErrors.push(`行 ${lineNum}: 不正なメソッド名 '${identifier}' - メソッド名にはASCII文字、数字、アンダースコアのみ使用できます`)
           }
         }
