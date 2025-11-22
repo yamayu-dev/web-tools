@@ -88,6 +88,38 @@ jobs:
           cd csharp-wasm
           dotnet publish -c Release
       
+      - name: Copy WASM files to deployment directory
+        run: |
+          # The dotnet publish outputs to public/wasm/net8.0/publish/wwwroot/_framework/
+          # We need to copy these files to public/wasm/ for deployment
+          OUTPUT_PATH=${{ steps.config.outputs.output_path }}
+          FRAMEWORK_PATH="${OUTPUT_PATH}/net8.0/publish/wwwroot/_framework"
+          
+          if [ -d "$FRAMEWORK_PATH" ]; then
+            echo "Copying WASM files from $FRAMEWORK_PATH to $OUTPUT_PATH"
+            
+            # Copy all files from _framework to root
+            cp -v "$FRAMEWORK_PATH"/* "$OUTPUT_PATH/" 2>/dev/null || true
+            
+            # Copy localized resource subdirectories (cs, de, es, fr, etc.)
+            for dir in "$FRAMEWORK_PATH"/*/; do
+              if [ -d "$dir" ]; then
+                dir_name=$(basename "$dir")
+                mkdir -p "$OUTPUT_PATH/$dir_name"
+                cp -rv "$dir"* "$OUTPUT_PATH/$dir_name/" 2>/dev/null || true
+              fi
+            done
+            
+            # Clean up the intermediate build directories
+            rm -rf "${OUTPUT_PATH}/net8.0"
+            
+            echo "WASM files copied successfully"
+            ls -lh "$OUTPUT_PATH" | head -20
+          else
+            echo "Error: Framework path $FRAMEWORK_PATH not found"
+            exit 1
+          fi
+      
       - name: Create version info
         run: |
           echo '{"version":"${{ needs.check-version.outputs.version }}","buildDate":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}' > ${{ steps.config.outputs.output_path }}/${{ steps.config.outputs.version_filename }}
