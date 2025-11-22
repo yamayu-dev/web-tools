@@ -357,18 +357,20 @@ output
         }
         
         // Check for invalid identifiers (non-ASCII characters)
-        const identifierMatch = line.match(/\b(var|int|string|double|float|bool|char|decimal|long|short|byte)\s+([^\s=;(]+)/)
+        // Note: While C# supports Unicode identifiers per spec, this fallback evaluator
+        // restricts to ASCII for simpler validation. Full Unicode support requires Roslyn.
+        const identifierMatch = line.match(/\b(var|int|string|double|float|bool|char|decimal|long|short|byte)\s+([a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*)/)
         if (identifierMatch) {
           const identifier = identifierMatch[2]
-          // C# identifiers must start with letter or underscore, followed by letters, digits, or underscores
-          // Only ASCII characters are allowed (no Unicode like あ, い, etc.)
+          // Validate identifier: must start with letter or underscore, followed by letters, digits, or underscores
+          // Only ASCII characters allowed
           if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
             syntaxErrors.push(`行 ${lineNum}: 不正な識別子 '${identifier}' - 識別子にはASCII文字、数字、アンダースコアのみ使用できます`)
           }
         }
         
         // Check for invalid identifiers in foreach loops
-        const foreachMatch = line.match(/foreach\s*\(\s*(\w+)\s+([^\s]+)\s+in/)
+        const foreachMatch = line.match(/foreach\s*\(\s*([a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*)\s+([a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*)\s+in/)
         if (foreachMatch) {
           const identifier = foreachMatch[2]
           if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
@@ -377,7 +379,7 @@ output
         }
         
         // Check for invalid method/function names
-        const methodMatch = line.match(/static\s+\w+\s+([^\s(]+)\s*\(/)
+        const methodMatch = line.match(/static\s+[a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*\s+([a-zA-Z_\u0080-\uFFFF][a-zA-Z0-9_\u0080-\uFFFF]*)\s*\(/)
         if (methodMatch) {
           const identifier = methodMatch[1]
           if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(identifier)) {
