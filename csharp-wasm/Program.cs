@@ -29,54 +29,40 @@ public partial class CSharpRunner
                 try
                 {
                     // Execute the C# code using Roslyn scripting
-                    // In WebAssembly, assemblies are loaded in memory without a file location
-                    // We need to explicitly add references to commonly used assemblies
-                    var references = new List<MetadataReference>();
+                    // In WebAssembly, assemblies are loaded in memory without file locations
+                    // To avoid metadata reference errors, we'll try compilation without explicit references
                     
-                    // Add references to common assemblies that are needed for most C# code
-                    var commonAssemblies = new[]
+                    try
                     {
-                        typeof(object).Assembly,                    // System.Private.CoreLib
-                        typeof(Console).Assembly,                   // System.Console
-                        typeof(Enumerable).Assembly,                // System.Linq
-                        typeof(System.Collections.Generic.List<>).Assembly // System.Collections
-                    };
-                    
-                    foreach (var assembly in commonAssemblies)
-                    {
-                        try
+                        // First attempt: Try with minimal script options
+                        // Only add imports, no explicit references
+                        var scriptOptions = ScriptOptions.Default
+                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text")
+                            .WithReferences(AppDomain.CurrentDomain.GetAssemblies().Where(a => !a.IsDynamic));
+                        
+                        var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
+                        
+                        // If there's a return value, add it to the output
+                        if (result.ReturnValue != null)
                         {
-                            if (!assembly.IsDynamic && !string.IsNullOrEmpty(assembly.Location))
-                            {
-                                references.Add(MetadataReference.CreateFromFile(assembly.Location));
-                            }
-                        }
-                        catch (IOException)
-                        {
-                            // Assembly file not accessible, skip it
-                        }
-                        catch (ArgumentException)
-                        {
-                            // Invalid assembly location, skip it
+                            output.AppendLine();
+                            output.AppendLine($"戻り値: {result.ReturnValue}");
                         }
                     }
-                    
-                    // If no references were added (WASM environment), don't use WithReferences
-                    // This will use default references which may work better in WASM
-                    var scriptOptions = references.Count > 0
-                        ? ScriptOptions.Default
-                            .WithReferences(references)
-                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text")
-                        : ScriptOptions.Default
-                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
-                    
-                    var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
-                    
-                    // If there's a return value, add it to the output
-                    if (result.ReturnValue != null)
+                    catch (ArgumentException ex) when (ex.Message.Contains("location"))
                     {
-                        output.AppendLine();
-                        output.AppendLine($"戻り値: {result.ReturnValue}");
+                        // If metadata reference error occurs, try alternative approach
+                        // Create script without any references and let it fail with better error
+                        var scriptOptions = ScriptOptions.Default
+                            .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
+                        
+                        var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
+                        
+                        if (result.ReturnValue != null)
+                        {
+                            output.AppendLine();
+                            output.AppendLine($"戻り値: {result.ReturnValue}");
+                        }
                     }
                 }
                 catch (CompilationErrorException ex)
