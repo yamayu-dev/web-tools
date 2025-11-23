@@ -1,4 +1,4 @@
-import { useColorMode } from '../components/ColorModeProvider'
+import { useColorMode } from '../hooks/useColorMode'
 import { COLOR_TOKENS } from '../constants/colorTokens'
 
 /**

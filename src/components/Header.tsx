@@ -4,7 +4,7 @@ import {
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { Menu, X, Moon, Sun } from 'lucide-react'
 import { useState } from 'react'
-import { useColorMode } from './ColorModeProvider'
+import { useColorMode } from '../hooks/useColorMode'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { UI_CONSTANTS } from '../constants/uiConstants'
 const NavItem = ({ to, children, onClick }: { to: string; children: React.ReactNode; onClick?: () => void }) => {

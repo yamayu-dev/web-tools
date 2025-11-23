@@ -1,23 +1,7 @@
-import React, { createContext, useContext, useEffect, useLayoutEffect, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useState } from 'react'
+import { ColorModeContext, type ColorModeContextType } from '../contexts/ColorModeContext'
 
-type ColorMode = 'light' | 'dark'
-
-interface ColorModeContextType {
-  colorMode: ColorMode
-  toggleColorMode: () => void
-  setColorMode: (mode: ColorMode) => void
-  isInitialized: boolean
-}
-
-const ColorModeContext = createContext<ColorModeContextType | undefined>(undefined)
-
-export const useColorMode = () => {
-  const context = useContext(ColorModeContext)
-  if (!context) {
-    throw new Error('useColorMode must be used within ColorModeProvider')
-  }
-  return context
-}
+type ColorMode = ColorModeContextType['colorMode']
 
 interface ColorModeProviderProps {
   children: React.ReactNode
