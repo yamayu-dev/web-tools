@@ -1,7 +1,7 @@
 {
   "mainAssemblyName": "CSharpRunner",
   "resources": {
-    "hash": "sha256-d+ASRllywcnt4nETVl8iDdpY+O3wiHkW60SjtLIHqjs=",
+    "hash": "sha256-zhT/azy8GC9o7xR0VIxAa2Q6E+iwVLux48tA2rahhcM=",
     "jsModuleNative": {
       "dotnet.native.js": "sha256-vtotCeXt2UD6oc459laJT32vBgigZ+eLoUmdeFkvYDk="
     },
@@ -18,7 +18,7 @@
     },
     "coreAssembly": {},
     "assembly": {
-      "CSharpRunner.wasm": "sha256-xC/gLNdk5a5KNoryuRcV4+63bG8V5JWPj/QwBHxRmcU=",
+      "CSharpRunner.wasm": "sha256-k9U8rTezLbUvsalreEYQZK/1OHpr/0ElBF8vabDwvqk=",
       "Microsoft.AspNetCore.Components.Web.wasm": "sha256-W5OwpEZK2sBh3ndrVSpAMkA8YVa7yYC2aRd34J9ONuk=",
       "Microsoft.AspNetCore.Components.WebAssembly.wasm": "sha256-f5zOswINsIbZj5MTkrA4aSsFCaVsUDhKjjWuVEGnxuI=",
       "Microsoft.AspNetCore.Components.wasm": "sha256-NY8BGunYUMpjCIojfzCLKXq96eGQJFqCqTnQFOyEWTs=",
