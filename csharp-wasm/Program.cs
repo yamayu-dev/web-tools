@@ -9,16 +9,61 @@ using Microsoft.CodeAnalysis;
 using System.Reflection.Metadata;
 using System.Linq;
 using System.Collections.Immutable;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Emit;
-using Basic.Reference.Assemblies;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 await builder.Build().RunAsync();
 
+// Custom metadata reference resolver for WASM that doesn't try to resolve file paths
+public class WasmMetadataReferenceResolver : MetadataReferenceResolver
+{
+    public override bool Equals(object? other) => other is WasmMetadataReferenceResolver;
+    public override int GetHashCode() => 1;
+    
+    public override ImmutableArray<PortableExecutableReference> ResolveReference(
+        string reference,
+        string? baseFilePath,
+        MetadataReferenceProperties properties)
+    {
+        // Return empty array - don't try to resolve file-based references in WASM
+        return ImmutableArray<PortableExecutableReference>.Empty;
+    }
+}
+
 // Export functions for JavaScript to call
 public partial class CSharpRunner
 {
+    // Helper method to add assembly reference
+    private static void AddAssemblyReference(Assembly assembly, List<MetadataReference> references)
+    {
+        // Try to use location if available (non-WASM scenario)
+        if (!string.IsNullOrEmpty(assembly.Location))
+        {
+            references.Add(MetadataReference.CreateFromFile(assembly.Location));
+            return;
+        }
+        
+        // In WASM, we can't use assembly.Location, but we can get raw metadata
+        // Using unsafe code to access the assembly bytes
+        unsafe
+        {
+            if (assembly.TryGetRawMetadata(out byte* blob, out int length))
+            {
+                var span = new ReadOnlySpan<byte>(blob, length);
+                var bytes = span.ToArray();
+                
+                // Create metadata reference from the assembly bytes
+                // Use ImmutableArray and explicitly pass filePath: null to indicate no physical location
+                var immutableBytes = ImmutableArray.Create(bytes);
+                var reference = MetadataReference.CreateFromImage(
+                    immutableBytes,
+                    properties: default,
+                    documentation: null,
+                    filePath: null);
+                
+                references.Add(reference);
+            }
+        }
+    }
     
     [JSExport]
     public static string CompileAndRun(string code)
@@ -35,23 +80,55 @@ public partial class CSharpRunner
                 
                 try
                 {
-                    // Use Basic.Reference.Assemblies to get reference assemblies that work in WASM
-                    // This avoids the "assembly without location" error
-                    var references = Net80.References.All;
+                    // Execute the C# code using Roslyn scripting
+                    // In WebAssembly, assemblies are loaded in memory without file locations
+                    // We need to create MetadataReferences from in-memory assembly bytes
                     
-                    // Use Roslyn Scripting API with pre-built reference assemblies
+                    var references = new List<MetadataReference>();
+                    
+                    // Create a set to track assemblies we've already added
+                    var addedAssemblies = new HashSet<string>();
+                    
+                    // Load ALL non-dynamic assemblies to avoid type resolution issues
+                    // This is crucial because Roslyn might try to resolve type forwarders
+                    // and other indirect references during compilation
+                    var allAssemblies = AppDomain.CurrentDomain.GetAssemblies()
+                        .Where(a => !a.IsDynamic)
+                        .ToList();
+                    
+                    foreach (var assembly in allAssemblies)
+                    {
+                        var assemblyName = assembly.GetName().Name;
+                        if (assemblyName == null || addedAssemblies.Contains(assemblyName))
+                            continue;
+                            
+                        try
+                        {
+                            AddAssemblyReference(assembly, references);
+                            addedAssemblies.Add(assemblyName);
+                        }
+                        catch
+                        {
+                            // Skip assemblies that can't be loaded
+                        }
+                    }
+                    
+                    // Create script options with the references we collected
                     var scriptOptions = ScriptOptions.Default
                         .WithReferences(references)
                         .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text")
-                        .WithEmitDebugInformation(false)
-                        .WithOptimizationLevel(OptimizationLevel.Release);
+                        .WithAllowUnsafe(true)
+                        .WithCheckOverflow(false)
+                        .WithFileEncoding(Encoding.UTF8)
+                        .WithMetadataResolver(new WasmMetadataReferenceResolver());
                     
-                    var result = CSharpScript.EvaluateAsync(code, scriptOptions).GetAwaiter().GetResult();
+                    var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
                     
-                    if (result != null)
+                    // If there's a return value, add it to the output
+                    if (result.ReturnValue != null)
                     {
                         output.AppendLine();
-                        output.AppendLine($"戻り値: {result}");
+                        output.AppendLine($"戻り値: {result.ReturnValue}");
                     }
                 }
                 catch (CompilationErrorException ex)
