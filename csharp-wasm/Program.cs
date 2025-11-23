@@ -15,14 +15,14 @@ await builder.Build().RunAsync();
 public class WasmMetadataReferenceResolver : MetadataReferenceResolver
 {
     public override bool Equals(object? other) => other is WasmMetadataReferenceResolver;
-    public override int GetHashCode() => 1;
+    public override int GetHashCode() => typeof(WasmMetadataReferenceResolver).GetHashCode();
     
     public override ImmutableArray<PortableExecutableReference> ResolveReference(
         string reference, 
         string? baseFilePath, 
         MetadataReferenceProperties properties)
     {
-        // Don't resolve any file-based references
+        // Don't resolve any file-based references in WASM environment
         return ImmutableArray<PortableExecutableReference>.Empty;
     }
 }
@@ -46,6 +46,7 @@ public partial class CSharpRunner
                 try
                 {
                     // Use Basic.Reference.Assemblies with custom resolver to prevent file system access
+                    // This provides portable metadata that works in WASM without file locations
                     var scriptOptions = ScriptOptions.Default
                         .AddReferences(Net80.References.All)
                         .WithMetadataResolver(new WasmMetadataReferenceResolver())
