@@ -4,9 +4,28 @@ using System.Runtime.InteropServices.JavaScript;
 using System.Text;
 using Microsoft.CodeAnalysis.CSharp.Scripting;
 using Microsoft.CodeAnalysis.Scripting;
+using Basic.Reference.Assemblies;
+using Microsoft.CodeAnalysis;
+using System.Collections.Immutable;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 await builder.Build().RunAsync();
+
+// Custom resolver that prevents loading assemblies from file system
+public class WasmMetadataReferenceResolver : MetadataReferenceResolver
+{
+    public override bool Equals(object? other) => other is WasmMetadataReferenceResolver;
+    public override int GetHashCode() => 1;
+    
+    public override ImmutableArray<PortableExecutableReference> ResolveReference(
+        string reference, 
+        string? baseFilePath, 
+        MetadataReferenceProperties properties)
+    {
+        // Don't resolve any file-based references
+        return ImmutableArray<PortableExecutableReference>.Empty;
+    }
+}
 
 // Export functions for JavaScript to call
 public partial class CSharpRunner
@@ -26,9 +45,10 @@ public partial class CSharpRunner
                 
                 try
                 {
-                    // Execute the C# code using Roslyn scripting
+                    // Use Basic.Reference.Assemblies with custom resolver to prevent file system access
                     var scriptOptions = ScriptOptions.Default
-                        .WithReferences(typeof(Console).Assembly)
+                        .AddReferences(Net80.References.All)
+                        .WithMetadataResolver(new WasmMetadataReferenceResolver())
                         .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
                     
                     var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
