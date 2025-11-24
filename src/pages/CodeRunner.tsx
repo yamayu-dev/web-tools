@@ -162,26 +162,8 @@ export default function CodeRunner() {
         // TypeScriptの型アノテーションを削除してJavaScriptとして実行
         let jsCode = code
         
-        // クラス定義のコンストラクタパラメータプロパティを変換
-        // constructor(public name: string, public age: number) -> constructor(name, age)
-        jsCode = jsCode.replace(
-          /constructor\s*\(\s*([^)]+)\s*\)/g,
-          (match: string, params: string) => {
-            // public/private/protected/readonly を削除
-            const cleanParams = params
-              .split(',')
-              .map((p: string) => {
-                return p.trim()
-                  .replace(/^(public|private|protected|readonly)\s+/, '')
-                  .replace(/:\s*[^,=]+/, '') // 型アノテーションを削除
-                  .trim()
-              })
-              .join(', ')
-            return `constructor(${cleanParams})`
-          }
-        )
-        
         // クラス定義内のコンストラクタパラメータプロパティを実際のプロパティ代入に変換
+        // この処理を最初に行う（型アノテーションが残っているうちに）
         jsCode = jsCode.replace(
           /class\s+(\w+)\s*\{([^}]*constructor\s*\(([^)]+)\)[^}]*)\}/gs,
           (match: string, className: string, classBody: string, constructorParams: string) => {
@@ -219,6 +201,24 @@ export default function CodeRunner() {
             )
             
             return `class ${className} {${modifiedBody}}`
+          }
+        )
+        
+        // クラス定義のコンストラクタパラメータから public/private/protected/readonly を削除
+        jsCode = jsCode.replace(
+          /constructor\s*\(\s*([^)]+)\s*\)/g,
+          (match: string, params: string) => {
+            // public/private/protected/readonly を削除
+            const cleanParams = params
+              .split(',')
+              .map((p: string) => {
+                return p.trim()
+                  .replace(/^(public|private|protected|readonly)\s+/, '')
+                  .replace(/:\s*[^,=]+/, '') // 型アノテーションを削除
+                  .trim()
+              })
+              .join(', ')
+            return `constructor(${cleanParams})`
           }
         )
         
