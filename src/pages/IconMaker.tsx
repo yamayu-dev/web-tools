@@ -384,7 +384,7 @@ export function IconMaker() {
                   <SelectableButton
                     key={weight.value}
                     isSelected={config.font.fontWeight === weight.value}
-                    onClick={() => updateFontConfig({ fontWeight: weight.value as any })}
+                    onClick={() => updateFontConfig({ fontWeight: weight.value as '400' | '600' | '700' })}
                     size="sm"
                     flex={1}>
                     {weight.label}

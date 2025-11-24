@@ -11,7 +11,7 @@ import {
 import { Play, RotateCcw, Code as CodeIcon } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
-import { useColorMode } from '../components/ColorModeProvider'
+import { useColorMode } from '../hooks/useColorMode'
 import { TOAST_DURATIONS } from '../constants/uiConstants'
 import { WASM_CONFIG } from '../constants/wasmConstants'
 

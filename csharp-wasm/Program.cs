@@ -2,8 +2,11 @@ using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Microsoft.JSInterop;
 using System.Runtime.InteropServices.JavaScript;
 using System.Text;
-using Microsoft.CodeAnalysis.CSharp.Scripting;
-using Microsoft.CodeAnalysis.Scripting;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis;
+using Basic.Reference.Assemblies;
+using System.Reflection;
+using System.Runtime.Loader;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 await builder.Build().RunAsync();
@@ -16,49 +19,81 @@ public partial class CSharpRunner
     {
         try
         {
+            // Wrap user code in a simple program structure
+            var wrappedCode = $@"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+public class UserProgram
+{{
+    public static void Execute()
+    {{
+        {code}
+    }}
+}}";
+
+            // Parse the code
+            var syntaxTree = CSharpSyntaxTree.ParseText(wrappedCode);
+
+            // Create compilation with Basic.Reference.Assemblies
+            var compilation = CSharpCompilation.Create(
+                "UserCode",
+                new[] { syntaxTree },
+                Net80.References.All,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+            // Compile to memory
+            using var ms = new MemoryStream();
+            var result = compilation.Emit(ms);
+
+            if (!result.Success)
+            {
+                var output = new StringBuilder();
+                output.AppendLine("コンパイルエラー:");
+                foreach (var diagnostic in result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error))
+                {
+                    output.AppendLine($"  {diagnostic.GetMessage()}");
+                }
+                return output.ToString();
+            }
+
+            // Load and execute the compiled assembly
+            ms.Seek(0, SeekOrigin.Begin);
+            var assembly = AssemblyLoadContext.Default.LoadFromStream(ms);
+            var type = assembly.GetType("UserProgram");
+            var method = type?.GetMethod("Execute", BindingFlags.Public | BindingFlags.Static);
+
+            if (method == null)
+            {
+                return "実行エラー: Execute メソッドが見つかりません";
+            }
+
             // Capture console output
-            var output = new StringBuilder();
+            var consoleOutput = new StringBuilder();
             var originalOut = Console.Out;
-            
-            using (var writer = new StringWriter(output))
+
+            using (var writer = new StringWriter(consoleOutput))
             {
                 Console.SetOut(writer);
                 
                 try
                 {
-                    // Execute the C# code using Roslyn scripting
-                    var scriptOptions = ScriptOptions.Default
-                        .WithReferences(typeof(Console).Assembly)
-                        .WithImports("System", "System.Collections.Generic", "System.Linq", "System.Text");
-                    
-                    var result = CSharpScript.RunAsync(code, scriptOptions).GetAwaiter().GetResult();
-                    
-                    // If there's a return value, add it to the output
-                    if (result.ReturnValue != null)
-                    {
-                        output.AppendLine();
-                        output.AppendLine($"戻り値: {result.ReturnValue}");
-                    }
-                }
-                catch (CompilationErrorException ex)
-                {
-                    output.AppendLine("コンパイルエラー:");
-                    foreach (var diagnostic in ex.Diagnostics)
-                    {
-                        output.AppendLine($"  {diagnostic}");
-                    }
+                    method.Invoke(null, null);
                 }
                 catch (Exception ex)
                 {
-                    output.AppendLine($"実行エラー: {ex.Message}");
+                    var innerEx = ex.InnerException ?? ex;
+                    consoleOutput.AppendLine($"実行エラー: {innerEx.Message}");
                 }
                 finally
                 {
                     Console.SetOut(originalOut);
                 }
             }
-            
-            return output.ToString();
+
+            return consoleOutput.ToString();
         }
         catch (Exception ex)
         {

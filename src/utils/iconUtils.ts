@@ -71,10 +71,11 @@ const drawBackground = (ctx: CanvasRenderingContext2D, config: IconConfig, size:
     case 'square':
       ctx.rect(0, 0, size, size)
       break
-    case 'rounded':
+    case 'rounded': {
       const cornerRadius = size * 0.125 // 12.5%の角丸
       ctx.roundRect(0, 0, size, size, cornerRadius)
       break
+    }
   }
   ctx.clip()
 
@@ -205,9 +206,10 @@ const getShapeElement = (shape: IconConfig['shape'], size: number, fill: string)
       return `<circle cx="${radius}" cy="${radius}" r="${radius}" fill="${fill}" />`
     case 'square':
       return `<rect x="0" y="0" width="${size}" height="${size}" fill="${fill}" />`
-    case 'rounded':
+    case 'rounded': {
       const cornerRadius = size * 0.125
       return `<rect x="0" y="0" width="${size}" height="${size}" rx="${cornerRadius}" ry="${cornerRadius}" fill="${fill}" />`
+    }
   }
 }
 
