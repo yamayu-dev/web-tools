@@ -19,8 +19,27 @@ public partial class CSharpRunner
     {
         try
         {
-            // Wrap user code in a simple program structure
-            var wrappedCode = $@"
+            // Detect if user code already has a class definition
+            bool hasClassDefinition = code.Contains("class ") || code.Contains("class\t") || code.Contains("class\n") || code.Contains("class\r");
+            
+            string wrappedCode;
+            if (hasClassDefinition)
+            {
+                // User provided complete code with class definition
+                // Just add using statements if not present
+                wrappedCode = code.Contains("using System;") 
+                    ? code 
+                    : $@"using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+{code}";
+            }
+            else
+            {
+                // User provided only statements/expressions - wrap them
+                wrappedCode = $@"
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,6 +52,7 @@ public class UserProgram
         {code}
     }}
 }}";
+            }
 
             // Parse the code
             var syntaxTree = CSharpSyntaxTree.ParseText(wrappedCode);
@@ -66,12 +86,21 @@ public class UserProgram
             // Load and execute the compiled assembly
             ms.Seek(0, SeekOrigin.Begin);
             var assembly = AssemblyLoadContext.Default.LoadFromStream(ms);
+            
+            // Try to find the entry point - either Execute method or Main method
             var type = assembly.GetType("UserProgram");
             var method = type?.GetMethod("Execute", BindingFlags.Public | BindingFlags.Static);
+            
+            // If UserProgram.Execute not found, look for Program.Main
+            if (method == null)
+            {
+                type = assembly.GetType("Program");
+                method = type?.GetMethod("Main", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+            }
 
             if (method == null)
             {
-                return "実行エラー: Execute メソッドが見つかりません";
+                return "実行エラー: Execute または Main メソッドが見つかりません";
             }
 
             // Capture console output
