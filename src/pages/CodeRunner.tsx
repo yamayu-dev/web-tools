@@ -229,6 +229,11 @@ export default function CodeRunner() {
         // Note: This is a simplified approach. It removes type annotations that follow
         // the pattern ": Type" but may not handle all edge cases perfectly.
         // For production use, consider using a proper TypeScript parser.
+        
+        // Arrow function return types: (): Type => { ... } or (param): Type => { ... }
+        jsCode = jsCode.replace(/(\([^)]*\))\s*:\s*[a-zA-Z_$][\w$<>[\]|,\s]*\s*=>/g, '$1 =>')
+        
+        // Regular type annotations: : Type followed by , ; ) = or newline
         jsCode = jsCode.replace(/:\s*([a-zA-Z_$][\w$]*(<[^>]+>)?(\[\])?(\s*\|\s*[a-zA-Z_$][\w$]*)*)\s*([,;)\n=])/g, '$5')
         
         // インターフェースと型定義を削除

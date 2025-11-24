@@ -64,12 +64,35 @@ public class UserProgram
             // Parse the code
             var syntaxTree = CSharpSyntaxTree.ParseText(wrappedCode);
 
-            // Create compilation with Basic.Reference.Assemblies
+            // Get references from runtime assemblies
+            // This ensures we have the actual runtime types available (like TaskAwaiter, LINQ methods, etc.)
+            var references = new List<MetadataReference>();
+            
+            // Add all loaded assemblies as references
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (!asm.IsDynamic && !string.IsNullOrEmpty(asm.Location))
+                {
+                    try
+                    {
+                        references.Add(MetadataReference.CreateFromFile(asm.Location));
+                    }
+                    catch
+                    {
+                        // Skip assemblies that can't be referenced
+                    }
+                }
+            }
+            
+            // Also add Basic.Reference.Assemblies as fallback for any missing types
+            references.AddRange(Net80.References.All);
+
+            // Create compilation with runtime assemblies
             // Disable features that require threading support in WebAssembly
             var compilation = CSharpCompilation.Create(
                 "UserCode",
                 new[] { syntaxTree },
-                Net80.References.All,
+                references,
                 new CSharpCompilationOptions(
                     OutputKind.DynamicallyLinkedLibrary,
                     concurrentBuild: false,  // Disable concurrent build to avoid threading issues
