@@ -33,8 +33,13 @@
     <TrimmerRootAssembly Include="System.Linq" />
     <TrimmerRootAssembly Include="System.Linq.Expressions" />
     <TrimmerRootAssembly Include="System.Threading.Tasks" />
+    <TrimmerRootAssembly Include="System.Threading" />
+    <TrimmerRootAssembly Include="System.Threading.Thread" />
+    <TrimmerRootAssembly Include="System.Threading.ThreadPool" />
+    <TrimmerRootAssembly Include="System.Threading.Timer" />
     <TrimmerRootAssembly Include="System.Runtime.CompilerServices.Unsafe" />
     <TrimmerRootAssembly Include="System.Collections" />
+    <TrimmerRootAssembly Include="System.Console" />
     <TrimmerRootAssembly Include="mscorlib" />
   </ItemGroup>
 
