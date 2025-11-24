@@ -64,6 +64,9 @@ OUTPUT_PATH=$(jq -r '.outputPath' csharp-wasm.config.json)
 VERSION_FILENAME=$(jq -r '.versionFilename' csharp-wasm.config.json)
 BUILD_VERSION=$(jq -r '.buildVersion' csharp-wasm.config.json)
 
+# .NET build output path structure
+DOTNET_FRAMEWORK_SUBPATH="net8.0/publish/wwwroot/_framework"
+
 echo "  出力パス: $OUTPUT_PATH"
 echo "  バージョンファイル名: $VERSION_FILENAME"
 echo "  ビルドバージョン: $BUILD_VERSION"
@@ -93,7 +96,7 @@ echo "✓ ビルドが完了しました"
 # WASM ファイルのコピー
 echo -e "\n${YELLOW}[5/6] WASM ファイルのコピー${NC}"
 
-FRAMEWORK_PATH="${OUTPUT_PATH}/net8.0/publish/wwwroot/_framework"
+FRAMEWORK_PATH="${OUTPUT_PATH}/${DOTNET_FRAMEWORK_SUBPATH}"
 
 if [ ! -d "$FRAMEWORK_PATH" ]; then
     echo -e "${RED}エラー: フレームワークパス $FRAMEWORK_PATH が見つかりません${NC}"
@@ -110,7 +113,7 @@ if [ ${#files[@]} -gt 0 ]; then
     for file in "${files[@]}"; do
         if [ -f "$file" ]; then
             cp -v "$file" "$OUTPUT_PATH/" || {
-                echo -e "${RED}警告: ファイル $(basename "$file") のコピーに失敗しました${NC}"
+                echo -e "${YELLOW}警告: ファイル $(basename "$file") のコピーに失敗しました${NC}"
             }
         fi
     done
@@ -125,9 +128,13 @@ for dir in "$FRAMEWORK_PATH"/*/; do
         echo "  サブディレクトリをコピー: $dir_name"
         mkdir -p "$OUTPUT_PATH/$dir_name"
         if [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
-            cp -rv "$dir"/* "$OUTPUT_PATH/$dir_name/" || {
-                echo -e "${YELLOW}警告: $dir_name のコピー中に一部のファイルがスキップされました${NC}"
-            }
+            # Use array to handle files with spaces properly
+            shopt -s nullglob
+            for subfile in "$dir"/*; do
+                cp -v "$subfile" "$OUTPUT_PATH/$dir_name/" || {
+                    echo -e "${YELLOW}警告: $(basename "$subfile") のコピーに失敗しました${NC}"
+                }
+            done
         fi
     fi
 done
@@ -145,7 +152,7 @@ ls -lh "$OUTPUT_PATH" | head -20
 echo -e "\n${YELLOW}[6/6] バージョン情報の作成${NC}"
 
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-# Use jq to safely construct JSON
+# Use jq to safely construct JSON (preferred over simple echo for special character handling)
 jq -n --arg version "$BUILD_VERSION" --arg date "$BUILD_DATE" \
     '{version: $version, buildDate: $date}' > "$OUTPUT_PATH/$VERSION_FILENAME"
 echo "✓ バージョン情報を作成しました: $OUTPUT_PATH/$VERSION_FILENAME"
