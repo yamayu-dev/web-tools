@@ -19,8 +19,32 @@ public partial class CSharpRunner
     {
         try
         {
-            // Wrap user code in a simple program structure
-            var wrappedCode = $@"
+            // Detect if user code already has a class definition
+            // Use a more robust check with word boundaries
+            bool hasClassDefinition = System.Text.RegularExpressions.Regex.IsMatch(
+                code, 
+                @"\bclass\s+\w+", 
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            
+            string wrappedCode;
+            if (hasClassDefinition)
+            {
+                // User provided complete code with class definition
+                // Add using statements only if they're missing
+                bool hasUsingStatements = code.Contains("using ");
+                wrappedCode = hasUsingStatements 
+                    ? code 
+                    : $@"using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+
+{code}";
+            }
+            else
+            {
+                // User provided only statements/expressions - wrap them
+                wrappedCode = $@"
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,16 +57,21 @@ public class UserProgram
         {code}
     }}
 }}";
+            }
 
             // Parse the code
             var syntaxTree = CSharpSyntaxTree.ParseText(wrappedCode);
 
             // Create compilation with Basic.Reference.Assemblies
+            // Disable features that require threading support in WebAssembly
             var compilation = CSharpCompilation.Create(
                 "UserCode",
                 new[] { syntaxTree },
                 Net80.References.All,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+                new CSharpCompilationOptions(
+                    OutputKind.DynamicallyLinkedLibrary,
+                    concurrentBuild: false,  // Disable concurrent build to avoid threading issues
+                    reportSuppressedDiagnostics: false));
 
             // Compile to memory
             using var ms = new MemoryStream();
@@ -62,12 +91,29 @@ public class UserProgram
             // Load and execute the compiled assembly
             ms.Seek(0, SeekOrigin.Begin);
             var assembly = AssemblyLoadContext.Default.LoadFromStream(ms);
+            
+            // Try to find the entry point
+            // First try UserProgram.Execute (for wrapped snippets)
             var type = assembly.GetType("UserProgram");
             var method = type?.GetMethod("Execute", BindingFlags.Public | BindingFlags.Static);
+            
+            // If not found, search for any class with a Main method
+            if (method == null)
+            {
+                foreach (var assemblyType in assembly.GetTypes())
+                {
+                    method = assemblyType.GetMethod("Main", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    if (method != null)
+                    {
+                        type = assemblyType;
+                        break;
+                    }
+                }
+            }
 
             if (method == null)
             {
-                return "実行エラー: Execute メソッドが見つかりません";
+                return "実行エラー: Execute または Main メソッドが見つかりません";
             }
 
             // Capture console output
