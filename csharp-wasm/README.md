@@ -51,6 +51,20 @@ The project uses IL trimming to reduce the WASM bundle size. The following assem
 
 These assemblies are required for user code that is compiled and executed dynamically at runtime.
 
+#### 新しい.NET機能を追加する場合
+
+全ての.NETライブラリを事前に記載する必要はありません。現在の方法は「必要なものだけを明示的に保持する」アプローチです。
+
+**新しい機能を使用する場合：**
+1. `CSharpRunner.csproj` の `<TrimmerRootAssembly>` セクションに該当するアセンブリを追加
+2. `csharp-wasm.config.json` の `buildVersion` を更新してリビルドをトリガー
+
+**代替案（全てのライブラリを保持）：**
+```xml
+<PublishTrimmed>false</PublishTrimmed>
+```
+この設定で全てのライブラリが保持されますが、WASMバンドルサイズが大幅に増加します（推奨しません）。
+
 ## TODO
 
 - Integrate Roslyn compiler for dynamic C# compilation
