@@ -38,11 +38,15 @@ public class UserProgram
             var syntaxTree = CSharpSyntaxTree.ParseText(wrappedCode);
 
             // Create compilation with Basic.Reference.Assemblies
+            // Disable features that require threading support in WebAssembly
             var compilation = CSharpCompilation.Create(
                 "UserCode",
                 new[] { syntaxTree },
                 Net80.References.All,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+                new CSharpCompilationOptions(
+                    OutputKind.DynamicallyLinkedLibrary,
+                    concurrentBuild: false,  // Disable concurrent build to avoid threading issues
+                    reportSuppressedDiagnostics: false));
 
             // Compile to memory
             using var ms = new MemoryStream();
