@@ -6,7 +6,7 @@
  * 設定ファイルの場所:
  * - csharp-wasm.config.json: GitHub Actions ビルド時に使用される単一の真実の源
  *   - outputPath: "public/wasm" → WASM ファイルの出力先
- *   - wasmFilename: "dotnet.wasm" → メインの WASM ファイル名
+ *   - wasmFilename: "dotnet.native.wasm" → メインの WASM ファイル名
  *   - versionFilename: "version.json" → バージョン情報ファイル名
  * 
  * このファイルの定数:
