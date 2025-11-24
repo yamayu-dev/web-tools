@@ -3,7 +3,7 @@
   "wasmEnabled": true,
   "description": "Configuration for C# WebAssembly execution. Increment buildVersion to trigger rebuild.",
   "outputPath": "public/wasm",
-  "wasmFilename": "dotnet.wasm",
+  "wasmFilename": "dotnet.native.wasm",
   "versionFilename": "version.json",
   "_note": "outputPath is used by GitHub Actions. TypeScript constants in src/constants/wasmConstants.ts must match these values."
 }

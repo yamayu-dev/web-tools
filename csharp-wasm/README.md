@@ -4,7 +4,19 @@ This project compiles C# code into WebAssembly for client-side execution in the 
 
 ## Building
 
+### ローカルでのビルド (推奨)
+
 ```bash
+# リポジトリルートから実行
+./scripts/build-csharp-wasm.sh
+```
+
+詳細は [`scripts/README.md`](../scripts/README.md) を参照してください。
+
+### 手動ビルド
+
+```bash
+cd csharp-wasm
 dotnet publish -c Release
 ```
 
