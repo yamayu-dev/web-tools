@@ -7,8 +7,10 @@ import {
   Textarea,
   Flex,
   Text,
+  Dialog,
+  IconButton,
 } from '@chakra-ui/react'
-import { Play, RotateCcw, Code as CodeIcon } from 'lucide-react'
+import { Play, RotateCcw, Code as CodeIcon, HelpCircle, Trash2, Download, Upload } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useColorMode } from '../hooks/useColorMode'
@@ -96,8 +98,10 @@ export default function CodeRunner() {
   const [isRunning, setIsRunning] = useState(false)
   const [pyodideReady, setPyodideReady] = useState(false)
   const [wasmReady, setWasmReady] = useState(false)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
   const pyodideRef = useRef<unknown>(null)
   const wasmRef = useRef<WasmRuntime | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const colorStyles = useColorStyles()
   const { colorMode } = useColorMode()
   const { showToast } = useToast()
@@ -229,6 +233,11 @@ export default function CodeRunner() {
         // Note: This is a simplified approach. It removes type annotations that follow
         // the pattern ": Type" but may not handle all edge cases perfectly.
         // For production use, consider using a proper TypeScript parser.
+        
+        // Arrow function return types: (): Type => { ... } or (param): Type => { ... }
+        jsCode = jsCode.replace(/(\([^)]*\))\s*:\s*[a-zA-Z_$][\w$<>[\]|,\s]*\s*=>/g, '$1 =>')
+        
+        // Regular type annotations: : Type followed by , ; ) = or newline
         jsCode = jsCode.replace(/:\s*([a-zA-Z_$][\w$]*(<[^>]+>)?(\[\])?(\s*\|\s*[a-zA-Z_$][\w$]*)*)\s*([,;)\n=])/g, '$5')
         
         // インターフェースと型定義を削除
@@ -477,6 +486,91 @@ output
     showToast('コードをリセットしました', 'success', TOAST_DURATIONS.SHORT)
   }
 
+  const clearCode = () => {
+    setCode('')
+    setOutput('')
+    showToast('コードをクリアしました', 'success', TOAST_DURATIONS.SHORT)
+  }
+
+  const downloadCode = () => {
+    const extensions = {
+      typescript: 'ts',
+      python: 'py',
+      csharp: 'cs'
+    }
+    const blob = new Blob([code], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `code.${extensions[language]}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    showToast('コードをダウンロードしました', 'success', TOAST_DURATIONS.SHORT)
+  }
+
+  const uploadCode = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const text = e.target?.result as string
+        setCode(text)
+        showToast('コードを読み込みました', 'success', TOAST_DURATIONS.SHORT)
+      }
+      reader.readAsText(file)
+    }
+    // Reset the input value so the same file can be uploaded again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const getLibraryInfo = () => {
+    const info = {
+      typescript: {
+        title: 'TypeScript',
+        available: [
+          'ブラウザ組み込みAPI（DOM、fetch、console等）',
+          'JavaScript標準ライブラリ',
+          'Web APIs（localStorage、sessionStorage等）'
+        ],
+        unavailable: [
+          'npmパッケージのimport（モジュールシステム未実装）',
+          'Node.js専用API（fs、path等）'
+        ]
+      },
+      python: {
+        title: 'Python',
+        available: [
+          'Python標準ライブラリ',
+          'Pyodide組み込みパッケージ（numpy、pandas、matplotlib等）',
+          'JavaScript連携（jsモジュール経由）'
+        ],
+        unavailable: [
+          'pipでの動的パッケージインストール',
+          'C拡張を必要とする一部パッケージ'
+        ]
+      },
+      csharp: {
+        title: 'C#',
+        available: [
+          '.NET 8.0 BCL（基本クラスライブラリ）全namespace',
+          'System.*, Microsoft.CSharp, System.Linq等',
+          'async/await、LINQ、コレクション、IO等',
+          'usingステートメントで任意のBCL namespaceを追加可能'
+        ],
+        unavailable: [
+          '外部NuGetパッケージ（ブラウザ環境のため）',
+          'ファイルシステムアクセス',
+          'ネットワーク機能（制限付き）'
+        ]
+      }
+    }
+    return info[language]
+  }
+
   return (
     <Container maxW="100%" p={4} h="calc(100vh - 80px)">
       <Flex direction="column" h="100%">
@@ -504,7 +598,9 @@ output
                 border: `1px solid ${colorStyles.border.default}`,
                 cursor: 'pointer',
                 height: '32px',
-                width: '200px'
+                width: '200px',
+                // Fix for option elements in dark mode
+                colorScheme: colorMode === 'dark' ? 'dark' : 'light',
               }}
               onMouseOver={(e) => {
                 (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
@@ -513,10 +609,26 @@ output
                 (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
               }}
             >
-              <option value="typescript">TypeScript</option>
-              <option value="python">Python</option>
-              <option value="csharp">C#</option>
+              <option value="typescript" style={{ backgroundColor: colorStyles.bg.primary, color: colorStyles.text.primary }}>TypeScript</option>
+              <option value="python" style={{ backgroundColor: colorStyles.bg.primary, color: colorStyles.text.primary }}>Python</option>
+              <option value="csharp" style={{ backgroundColor: colorStyles.bg.primary, color: colorStyles.text.primary }}>C#</option>
             </select>
+
+            {/* ヘルプボタン */}
+            <IconButton
+              aria-label="ライブラリ仕様を表示"
+              onClick={() => setIsHelpOpen(true)}
+              bg={colorStyles.bg.primary}
+              color={colorStyles.text.primary}
+              borderColor={colorStyles.border.default}
+              border="1px solid"
+              _hover={{
+                bg: colorStyles.bg.secondary
+              }}
+              size="sm"
+            >
+              <HelpCircle size={16} />
+            </IconButton>
 
             {/* 実行ボタン */}
             <Button
@@ -546,6 +658,60 @@ output
             >
               リセット
             </Button>
+
+            {/* クリアボタン */}
+            <Button
+              leftIcon={<Trash2 size={16} />}
+              onClick={clearCode}
+              bg={colorStyles.bg.primary}
+              color={colorStyles.text.primary}
+              borderColor={colorStyles.border.default}
+              border="1px solid"
+              _hover={{
+                bg: colorStyles.bg.secondary
+              }}
+            >
+              クリア
+            </Button>
+
+            {/* ダウンロードボタン */}
+            <Button
+              leftIcon={<Download size={16} />}
+              onClick={downloadCode}
+              bg={colorStyles.bg.primary}
+              color={colorStyles.text.primary}
+              borderColor={colorStyles.border.default}
+              border="1px solid"
+              _hover={{
+                bg: colorStyles.bg.secondary
+              }}
+            >
+              保存
+            </Button>
+
+            {/* アップロードボタン */}
+            <Button
+              leftIcon={<Upload size={16} />}
+              onClick={() => fileInputRef.current?.click()}
+              bg={colorStyles.bg.primary}
+              color={colorStyles.text.primary}
+              borderColor={colorStyles.border.default}
+              border="1px solid"
+              _hover={{
+                bg: colorStyles.bg.secondary
+              }}
+            >
+              読込
+            </Button>
+
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".ts,.js,.py,.cs,.txt"
+              onChange={uploadCode}
+              style={{ display: 'none' }}
+            />
           </Flex>
 
           {language === 'python' && !pyodideReady && (
@@ -643,6 +809,79 @@ output
           </Box>
         </Flex>
       </Flex>
+
+      {/* ヘルプダイアログ */}
+      <Dialog.Root open={isHelpOpen} onOpenChange={(e) => setIsHelpOpen(e.open)}>
+        <Dialog.Backdrop />
+        <Dialog.Positioner>
+          <Dialog.Content
+            maxW="600px"
+            bg={colorStyles.bg.primary}
+            color={colorStyles.text.primary}
+            borderColor={colorStyles.border.default}
+            border="1px solid"
+          >
+            <Dialog.Header>
+              <Dialog.Title fontSize="lg" fontWeight="bold">
+                {getLibraryInfo().title} - 利用可能なライブラリ
+              </Dialog.Title>
+            </Dialog.Header>
+            <Dialog.CloseTrigger />
+            <Dialog.Body>
+              <Box mb={4}>
+                <Text fontWeight="bold" mb={2} color="green.600">
+                  ✓ 利用可能
+                </Text>
+                <Box
+                  as="ul"
+                  pl={4}
+                  css={{
+                    '& > li': {
+                      marginBottom: '0.5rem',
+                      listStyleType: 'disc',
+                    }
+                  }}
+                >
+                  {getLibraryInfo().available.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </Box>
+              </Box>
+              <Box>
+                <Text fontWeight="bold" mb={2} color={colorStyles.accent.red.text}>
+                  ✗ 利用不可
+                </Text>
+                <Box
+                  as="ul"
+                  pl={4}
+                  css={{
+                    '& > li': {
+                      marginBottom: '0.5rem',
+                      listStyleType: 'disc',
+                    }
+                  }}
+                >
+                  {getLibraryInfo().unavailable.map((item, index) => (
+                    <li key={index}>{item}</li>
+                  ))}
+                </Box>
+              </Box>
+            </Dialog.Body>
+            <Dialog.Footer>
+              <Button
+                onClick={() => setIsHelpOpen(false)}
+                bg={colorStyles.accent.blue.button}
+                color="white"
+                _hover={{
+                  bg: colorStyles.accent.blue.buttonHover
+                }}
+              >
+                閉じる
+              </Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
     </Container>
   )
 }

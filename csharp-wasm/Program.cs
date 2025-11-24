@@ -64,12 +64,17 @@ public class UserProgram
             // Parse the code
             var syntaxTree = CSharpSyntaxTree.ParseText(wrappedCode);
 
-            // Create compilation with Basic.Reference.Assemblies
+            // Use Basic.Reference.Assemblies.Net80 which includes all .NET 8.0 reference assemblies
+            // This should include System.Runtime, System.Linq, System.Threading.Tasks, etc.
+            // Note: Reference assemblies are metadata-only but should be sufficient for compilation
+            var references = Net80.References.All;
+
+            // Create compilation
             // Disable features that require threading support in WebAssembly
             var compilation = CSharpCompilation.Create(
                 "UserCode",
                 new[] { syntaxTree },
-                Net80.References.All,
+                references,
                 new CSharpCompilationOptions(
                     OutputKind.DynamicallyLinkedLibrary,
                     concurrentBuild: false,  // Disable concurrent build to avoid threading issues

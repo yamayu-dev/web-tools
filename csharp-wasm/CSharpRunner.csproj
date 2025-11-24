@@ -11,6 +11,13 @@
     <OutputPath>../public/wasm/</OutputPath>
     <WasmBuildOnlyAfterPublish>true</WasmBuildOnlyAfterPublish>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
+    <!-- 
+      Prevent IL Linker from trimming assemblies needed for dynamic code execution
+      This ensures System.Runtime, System.Linq, System.Threading.Tasks, etc. are available at runtime
+    -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +25,17 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
     <PackageReference Include="Basic.Reference.Assemblies.Net80" Version="1.7.8" />
+  </ItemGroup>
+
+  <!-- Preserve specific assemblies from trimming for dynamic code execution -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="System.Runtime" />
+    <TrimmerRootAssembly Include="System.Linq" />
+    <TrimmerRootAssembly Include="System.Linq.Expressions" />
+    <TrimmerRootAssembly Include="System.Threading.Tasks" />
+    <TrimmerRootAssembly Include="System.Runtime.CompilerServices.Unsafe" />
+    <TrimmerRootAssembly Include="System.Collections" />
+    <TrimmerRootAssembly Include="mscorlib" />
   </ItemGroup>
 
 </Project>
