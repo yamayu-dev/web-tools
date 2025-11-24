@@ -1,14 +1,16 @@
 #!/bin/bash
 
+# C# WebAssembly Local Build Script
+# Builds WASM files locally using the same process as GitHub Actions
 # C# WebAssembly ローカルビルドスクリプト
 # GitHub Actions と同じ手順でローカル環境でWASMファイルをビルドします
 #
-# 使い方:
+# Usage / 使い方:
 #   ./scripts/build-csharp-wasm.sh
 #
-# 前提条件:
-#   - .NET 8.0 SDK がインストールされていること
-#   - jq コマンドがインストールされていること (JSON パース用)
+# Prerequisites / 前提条件:
+#   - .NET 8.0 SDK must be installed / .NET 8.0 SDK がインストールされていること
+#   - jq command must be installed (for JSON parsing) / jq コマンドがインストールされていること
 #     - Ubuntu/Debian: sudo apt-get install jq
 #     - macOS: brew install jq
 
@@ -101,7 +103,14 @@ fi
 echo "WASM ファイルを $FRAMEWORK_PATH から $OUTPUT_PATH にコピーしています..."
 
 # _framework から root へすべてのファイルをコピー
-cp -v "$FRAMEWORK_PATH"/* "$OUTPUT_PATH/" 2>/dev/null || true
+# Copy all files from _framework to root, excluding directories
+if [ -n "$(ls -A "$FRAMEWORK_PATH"/*.* 2>/dev/null)" ]; then
+    cp -v "$FRAMEWORK_PATH"/*.* "$OUTPUT_PATH/" || {
+        echo -e "${RED}警告: 一部のファイルのコピーに失敗しました${NC}"
+    }
+else
+    echo -e "${YELLOW}警告: $FRAMEWORK_PATH にファイルが見つかりません${NC}"
+fi
 
 # ローカライズリソースのサブディレクトリをコピー (cs, de, es, fr, etc.)
 for dir in "$FRAMEWORK_PATH"/*/; do
@@ -109,7 +118,11 @@ for dir in "$FRAMEWORK_PATH"/*/; do
         dir_name=$(basename "$dir")
         echo "  サブディレクトリをコピー: $dir_name"
         mkdir -p "$OUTPUT_PATH/$dir_name"
-        cp -rv "$dir"* "$OUTPUT_PATH/$dir_name/" 2>/dev/null || true
+        if [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
+            cp -rv "$dir"* "$OUTPUT_PATH/$dir_name/" || {
+                echo -e "${YELLOW}警告: $dir_name のコピー中に一部のファイルがスキップされました${NC}"
+            }
+        fi
     fi
 done
 
@@ -126,7 +139,9 @@ ls -lh "$OUTPUT_PATH" | head -20
 echo -e "\n${YELLOW}[6/6] バージョン情報の作成${NC}"
 
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-echo "{\"version\":\"$BUILD_VERSION\",\"buildDate\":\"$BUILD_DATE\"}" > "$OUTPUT_PATH/$VERSION_FILENAME"
+# Use jq to safely construct JSON
+jq -n --arg version "$BUILD_VERSION" --arg date "$BUILD_DATE" \
+    '{version: $version, buildDate: $date}' > "$OUTPUT_PATH/$VERSION_FILENAME"
 echo "✓ バージョン情報を作成しました: $OUTPUT_PATH/$VERSION_FILENAME"
 
 # 完了メッセージ

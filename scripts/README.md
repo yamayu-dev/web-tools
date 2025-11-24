@@ -42,7 +42,8 @@ npm run dev
 
 ### 3. ブラウザでテスト
 
-1. ブラウザで http://localhost:5173/web-tools/ を開く
+1. ブラウザで開発サーバーのURLを開く (通常は http://localhost:5173/web-tools/)
+   - URLは `npm run dev` の出力を確認してください
 2. 「コード実行」ページに移動
 3. 言語セレクタで「C#」を選択
 4. C# 実行環境が正常に初期化されることを確認
