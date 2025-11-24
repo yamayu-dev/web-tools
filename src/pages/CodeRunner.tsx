@@ -177,7 +177,8 @@ export default function CodeRunner() {
         
         // First, protect template strings and string literals by temporarily replacing them
         const protectedStrings: string[] = []
-        jsCode = jsCode.replace(/`[^`]*`|'[^']*'|"[^"]*"/g, (match: string) => {
+        // Handle template literals, double-quoted strings, and single-quoted strings with proper escape handling
+        jsCode = jsCode.replace(/`(?:[^`\\]|\\.)*`|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, (match: string) => {
           const placeholder = `__STRING_${protectedStrings.length}__`
           protectedStrings.push(match)
           return placeholder
