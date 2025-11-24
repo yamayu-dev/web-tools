@@ -20,14 +20,19 @@ public partial class CSharpRunner
         try
         {
             // Detect if user code already has a class definition
-            bool hasClassDefinition = code.Contains("class ") || code.Contains("class\t") || code.Contains("class\n") || code.Contains("class\r");
+            // Use a more robust check with word boundaries
+            bool hasClassDefinition = System.Text.RegularExpressions.Regex.IsMatch(
+                code, 
+                @"\bclass\s+\w+", 
+                System.Text.RegularExpressions.RegexOptions.Multiline);
             
             string wrappedCode;
             if (hasClassDefinition)
             {
                 // User provided complete code with class definition
-                // Just add using statements if not present
-                wrappedCode = code.Contains("using System;") 
+                // Add using statements only if they're missing
+                bool hasUsingStatements = code.Contains("using ");
+                wrappedCode = hasUsingStatements 
                     ? code 
                     : $@"using System;
 using System.Collections.Generic;
@@ -87,15 +92,23 @@ public class UserProgram
             ms.Seek(0, SeekOrigin.Begin);
             var assembly = AssemblyLoadContext.Default.LoadFromStream(ms);
             
-            // Try to find the entry point - either Execute method or Main method
+            // Try to find the entry point
+            // First try UserProgram.Execute (for wrapped snippets)
             var type = assembly.GetType("UserProgram");
             var method = type?.GetMethod("Execute", BindingFlags.Public | BindingFlags.Static);
             
-            // If UserProgram.Execute not found, look for Program.Main
+            // If not found, search for any class with a Main method
             if (method == null)
             {
-                type = assembly.GetType("Program");
-                method = type?.GetMethod("Main", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                foreach (var assemblyType in assembly.GetTypes())
+                {
+                    method = assemblyType.GetMethod("Main", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    if (method != null)
+                    {
+                        type = assemblyType;
+                        break;
+                    }
+                }
             }
 
             if (method == null)
