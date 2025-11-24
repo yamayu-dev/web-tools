@@ -829,7 +829,7 @@ output
             <Dialog.CloseTrigger />
             <Dialog.Body>
               <Box mb={4}>
-                <Text fontWeight="bold" mb={2} color={colorStyles.accent.green.text}>
+                <Text fontWeight="bold" mb={2} color="green.600">
                   ✓ 利用可能
                 </Text>
                 <Box
