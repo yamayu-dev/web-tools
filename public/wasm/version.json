@@ -1,4 +1,1 @@
-{
-  "version": "1.0.2",
-  "buildDate": "2025-11-24T01:07:12Z"
-}
+{"version":"1.0.2","buildDate":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
