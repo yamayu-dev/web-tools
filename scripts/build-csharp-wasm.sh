@@ -103,11 +103,17 @@ fi
 echo "WASM ファイルを $FRAMEWORK_PATH から $OUTPUT_PATH にコピーしています..."
 
 # _framework から root へすべてのファイルをコピー
-# Copy all files from _framework to root, excluding directories
-if [ -n "$(ls -A "$FRAMEWORK_PATH"/*.* 2>/dev/null)" ]; then
-    cp -v "$FRAMEWORK_PATH"/*.* "$OUTPUT_PATH/" || {
-        echo -e "${RED}警告: 一部のファイルのコピーに失敗しました${NC}"
-    }
+# Copy all files from _framework to root (matching GitHub Actions behavior)
+shopt -s nullglob  # Handle case where no files match
+files=("$FRAMEWORK_PATH"/*)
+if [ ${#files[@]} -gt 0 ]; then
+    for file in "${files[@]}"; do
+        if [ -f "$file" ]; then
+            cp -v "$file" "$OUTPUT_PATH/" || {
+                echo -e "${RED}警告: ファイル $(basename "$file") のコピーに失敗しました${NC}"
+            }
+        fi
+    done
 else
     echo -e "${YELLOW}警告: $FRAMEWORK_PATH にファイルが見つかりません${NC}"
 fi
@@ -119,7 +125,7 @@ for dir in "$FRAMEWORK_PATH"/*/; do
         echo "  サブディレクトリをコピー: $dir_name"
         mkdir -p "$OUTPUT_PATH/$dir_name"
         if [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
-            cp -rv "$dir"* "$OUTPUT_PATH/$dir_name/" || {
+            cp -rv "$dir"/* "$OUTPUT_PATH/$dir_name/" || {
                 echo -e "${YELLOW}警告: $dir_name のコピー中に一部のファイルがスキップされました${NC}"
             }
         fi
