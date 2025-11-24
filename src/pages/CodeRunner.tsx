@@ -245,8 +245,8 @@ export default function CodeRunner() {
         // Promiseが返された場合は待機
         if (result instanceof Promise) {
           await result
-          // 少し待ってログが完了するのを待つ
-          await new Promise(resolve => setTimeout(resolve, 100))
+          // 非同期処理が完全に完了するのを待つ（タイマーなどを考慮）
+          await new Promise(resolve => setTimeout(resolve, 1000))
         }
         
         setOutput(logs.length > 0 ? logs.join('\n') : '実行完了（出力なし）')
