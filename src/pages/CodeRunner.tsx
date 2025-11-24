@@ -67,6 +67,7 @@ print(f"Sum: {total}")`,
   
   csharp: `// C#コード例
 using System;
+using System.Linq;
 
 class Program
 {
@@ -82,6 +83,11 @@ class Program
             sum += num;
         }
         Console.WriteLine($"Sum: {sum}");
+        
+        // LINQ の例 - Console.WriteLine(bool) は使えないため .ToString() を使用
+        Console.WriteLine($"Any > 3: {numbers.Any(n => n > 3).ToString()}");
+        Console.WriteLine($"All < 10: {numbers.All(n => n < 10).ToString()}");
+        Console.WriteLine($"Contains 3: {numbers.Contains(3).ToString()}");
     }
     
     static string Greet(string name)
@@ -169,6 +175,14 @@ export default function CodeRunner() {
         // TypeScriptの型アノテーションを削除してJavaScriptとして実行
         let jsCode = code
         
+        // First, protect template strings and string literals by temporarily replacing them
+        const protectedStrings: string[] = []
+        jsCode = jsCode.replace(/`[^`]*`|'[^']*'|"[^"]*"/g, (match: string) => {
+          const placeholder = `__STRING_${protectedStrings.length}__`
+          protectedStrings.push(match)
+          return placeholder
+        })
+        
         // クラス定義内のコンストラクタパラメータプロパティを実際のプロパティ代入に変換
         // この処理を最初に行う（型アノテーションが残っているうちに）
         jsCode = jsCode.replace(
@@ -234,18 +248,35 @@ export default function CodeRunner() {
         // the pattern ": Type" but may not handle all edge cases perfectly.
         // For production use, consider using a proper TypeScript parser.
         
-        // Arrow function return types: (): Type => { ... } or (param): Type => { ... }
-        jsCode = jsCode.replace(/(\([^)]*\))\s*:\s*[a-zA-Z_$][\w$<>[\]|,\s]*\s*=>/g, '$1 =>')
+        // Function return types: ): Type { or ): Type => 
+        jsCode = jsCode.replace(/\)\s*:\s*[a-zA-Z_$][\w$<>[\]|,\s]*\s*(\{|=>)/g, ') $1')
         
-        // Regular type annotations: : Type followed by , ; ) = or newline
-        jsCode = jsCode.replace(/:\s*([a-zA-Z_$][\w$]*(<[^>]+>)?(\[\])?(\s*\|\s*[a-zA-Z_$][\w$]*)*)\s*([,;)\n=])/g, '$5')
+        // Function parameter type annotations: (name: Type) - handle within parentheses
+        // This regex specifically targets parameters inside function signatures
+        jsCode = jsCode.replace(/\(([^)]*)\)/g, (match: string, params: string) => {
+          // Check if this looks like a function parameter list (contains colons for types)
+          if (!params.includes(':')) {
+            return match; // No type annotations, return as is
+          }
+          // Remove type annotations from parameters
+          const cleanParams = params.replace(/([a-zA-Z_$][\w$]*)\s*:\s*[a-zA-Z_$][\w$]*(<[^>]+>)?(\[\])?(\s*\|\s*[a-zA-Z_$][\w$]*)*/g, '$1');
+          return `(${cleanParams})`;
+        })
         
-        // インターフェースと型定義を削除
+        // Variable declarations with type annotations: const x: Type = ...
+        jsCode = jsCode.replace(/(const|let|var)\s+([a-zA-Z_$][\w$]*)\s*:\s*[a-zA-Z_$][\w$]*(<[^>]+>)?(\[\])?(\s*\|\s*[a-zA-Z_$][\w$]*)*/g, '$1 $2')
+        
+        // Remove interface and type definitions
         jsCode = jsCode.replace(/interface\s+\w+\s*\{[^}]*\}/g, '')
         jsCode = jsCode.replace(/type\s+\w+\s*=\s*[^;\n]+[;\n]/g, '')
         
         // as キャストを削除
         jsCode = jsCode.replace(/\s+as\s+\w+/g, '')
+        
+        // Restore protected strings
+        protectedStrings.forEach((str: string, index: number) => {
+          jsCode = jsCode.replace(`__STRING_${index}__`, str)
+        })
         
         // 非同期コードをサポートするために、async関数でラップして実行
         const wrappedCode = `
@@ -564,7 +595,8 @@ output
         unavailable: [
           '外部NuGetパッケージ（ブラウザ環境のため）',
           'ファイルシステムアクセス',
-          'ネットワーク機能（制限付き）'
+          'ネットワーク機能（制限付き）',
+          'Console.WriteLine(bool) - bool値は.ToString()で文字列化が必要'
         ]
       }
     }
@@ -585,34 +617,36 @@ output
 
           <Flex gap={2} flexWrap="wrap" mb={3}>
             {/* 言語選択 */}
-            <select
-              key={`language-${colorMode}`}
+            <Box
+              as="select"
               value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-              style={{
-                fontSize: '14px',
-                padding: '6px 12px',
-                borderRadius: '6px',
-                backgroundColor: colorStyles.bg.primary,
-                color: colorStyles.text.primary,
-                border: `1px solid ${colorStyles.border.default}`,
-                cursor: 'pointer',
-                height: '32px',
-                width: '200px',
-                // Fix for option elements in dark mode
+              onChange={(e) => setLanguage((e.target as HTMLSelectElement).value as Language)}
+              fontSize="14px"
+              px={3}
+              py="6px"
+              borderRadius="6px"
+              bg={colorStyles.bg.primary}
+              color={colorStyles.text.primary}
+              border="1px solid"
+              borderColor={colorStyles.border.default}
+              cursor="pointer"
+              h="32px"
+              w="200px"
+              css={{
                 colorScheme: colorMode === 'dark' ? 'dark' : 'light',
+                '& option': {
+                  backgroundColor: colorMode === 'dark' ? '#1a202c' : '#ffffff',
+                  color: colorMode === 'dark' ? '#e2e8f0' : '#1a202c',
+                }
               }}
-              onMouseOver={(e) => {
-                (e.target as HTMLSelectElement).style.borderColor = colorStyles.accent.blue.linkColor
-              }}
-              onMouseOut={(e) => {
-                (e.target as HTMLSelectElement).style.borderColor = colorStyles.border.default
+              _hover={{
+                borderColor: colorStyles.accent.blue.linkColor
               }}
             >
-              <option value="typescript" style={{ backgroundColor: colorStyles.bg.primary, color: colorStyles.text.primary }}>TypeScript</option>
-              <option value="python" style={{ backgroundColor: colorStyles.bg.primary, color: colorStyles.text.primary }}>Python</option>
-              <option value="csharp" style={{ backgroundColor: colorStyles.bg.primary, color: colorStyles.text.primary }}>C#</option>
-            </select>
+              <option value="typescript">TypeScript</option>
+              <option value="python">Python</option>
+              <option value="csharp">C#</option>
+            </Box>
 
             {/* ヘルプボタン */}
             <IconButton
