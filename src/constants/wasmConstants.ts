@@ -10,8 +10,8 @@
  *   - versionFilename: "version.json" → バージョン情報ファイル名
  * 
  * このファイルの定数:
- * - OUTPUT_DIR: 'wasm/net8.0/wwwroot/_framework' (public/ からの相対パス、ブラウザからのアクセス用)
- * - WASM_FILENAME: 'dotnet.wasm' (Blazor WebAssembly が生成するファイル名)
+ * - OUTPUT_DIR: 'wasm' (public/ からの相対パス、ブラウザからのアクセス用)
+ * - WASM_FILENAME: 'dotnet.native.wasm' (Blazor WebAssembly が生成するファイル名)
  * - VERSION_FILENAME: 'version.json' (バージョン情報ファイル名)
  * 
  * 使用箇所:
@@ -25,11 +25,12 @@ export const WASM_CONFIG = {
   /** 
    * WASM ファイルの出力ディレクトリ (public/ からの相対パス)
    * ブラウザからのアクセス時は BASE_URL に続けてこのパスが使われる
-   * 例: BASE_URL が '/web-tools/' の場合、'/web-tools/wasm/net8.0/wwwroot/_framework/' になる
+   * 例: BASE_URL が '/web-tools/' の場合、'/web-tools/wasm/' になる
    * 
    * ⚠️ csharp-wasm.config.json の outputPath "public/wasm" と対応
+   * ⚠️ GitHub Actions はビルド後に net8.0/publish/wwwroot/_framework から wasm/ へファイルをコピーする
    */
-  OUTPUT_DIR: 'wasm/net8.0/wwwroot/_framework',
+  OUTPUT_DIR: 'wasm',
   
   /** 
    * Blazor WebAssembly が生成するメインの WASM ファイル名
@@ -49,7 +50,7 @@ export const WASM_CONFIG = {
 /**
  * WASM ファイルのフルパスを BASE_URL からの相対パスで取得
  * @param baseUrl - import.meta.env.BASE_URL (末尾にスラッシュを含む)
- * @returns WASM ファイルへのパス (例: '/web-tools/wasm/net8.0/wwwroot/_framework/dotnet.wasm')
+ * @returns WASM ファイルへのパス (例: '/web-tools/wasm/dotnet.native.wasm')
  */
 export function getWasmFilePath(baseUrl: string): string {
   return `${baseUrl}${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}`
