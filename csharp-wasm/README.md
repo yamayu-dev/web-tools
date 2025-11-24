@@ -32,6 +32,25 @@ To trigger a rebuild via GitHub Actions, update the `buildVersion` in `../csharp
 - Exports functions via JSExport for JavaScript interop
 - Intended to provide client-side C# compilation and execution
 
+### Trimming Configuration
+
+The project uses IL trimming to reduce the WASM bundle size. The following assemblies are marked as `TrimmerRootAssembly` to ensure they are fully preserved for dynamic code execution:
+
+- `System.Runtime` - Core runtime functionality
+- `System.Linq` - LINQ operations
+- `System.Linq.Expressions` - Expression trees
+- `System.Threading.Tasks` - Task-based async operations
+- `System.Threading` - Threading primitives
+- `System.Threading.Thread` - Thread management
+- `System.Threading.ThreadPool` - ThreadPool support
+- `System.Threading.Timer` - Timer functionality
+- `System.Runtime.CompilerServices.Unsafe` - Unsafe operations
+- `System.Collections` - Collection types
+- `System.Console` - Console I/O operations
+- `mscorlib` - Legacy core library
+
+These assemblies are required for user code that is compiled and executed dynamically at runtime.
+
 ## TODO
 
 - Integrate Roslyn compiler for dynamic C# compilation
