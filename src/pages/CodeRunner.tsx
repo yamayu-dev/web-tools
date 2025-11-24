@@ -133,7 +133,7 @@ export default function CodeRunner() {
     }
   }
 
-  const runTypeScript = () => {
+  const runTypeScript = async () => {
     try {
       // console.logをキャプチャ
       const logs: string[] = []
@@ -160,11 +160,94 @@ export default function CodeRunner() {
 
       try {
         // TypeScriptの型アノテーションを削除してJavaScriptとして実行
-        const jsCode = code
-          .replace(/:\s*\w+(\[\])?/g, '') // 型アノテーションを削除
-          .replace(/function\s+(\w+)\s*\([^)]*\)\s*:\s*\w+/g, 'function $1(...)') // 戻り値の型を削除
+        let jsCode = code
         
-        eval(jsCode)
+        // クラス定義のコンストラクタパラメータプロパティを変換
+        // constructor(public name: string, public age: number) -> constructor(name, age)
+        jsCode = jsCode.replace(
+          /constructor\s*\(\s*([^)]+)\s*\)/g,
+          (match: string, params: string) => {
+            // public/private/protected/readonly を削除
+            const cleanParams = params
+              .split(',')
+              .map((p: string) => {
+                return p.trim()
+                  .replace(/^(public|private|protected|readonly)\s+/, '')
+                  .replace(/:\s*[^,=]+/, '') // 型アノテーションを削除
+                  .trim()
+              })
+              .join(', ')
+            return `constructor(${cleanParams})`
+          }
+        )
+        
+        // クラス定義内のコンストラクタパラメータプロパティを実際のプロパティ代入に変換
+        jsCode = jsCode.replace(
+          /class\s+(\w+)\s*\{([^}]*constructor\s*\(([^)]+)\)[^}]*)\}/gs,
+          (match: string, className: string, classBody: string, constructorParams: string) => {
+            // コンストラクタパラメータからプロパティ名を抽出
+            const paramProps = constructorParams
+              .split(',')
+              .map((p: string) => {
+                const trimmed = p.trim()
+                const hasModifier = /^(public|private|protected|readonly)\s+/.test(trimmed)
+                if (hasModifier) {
+                  // public name: string -> name
+                  const paramName = trimmed
+                    .replace(/^(public|private|protected|readonly)\s+/, '')
+                    .replace(/:\s*[^,=]+/, '')
+                    .trim()
+                  return paramName
+                }
+                return null
+              })
+              .filter((p): p is string => p !== null)
+            
+            if (paramProps.length === 0) {
+              return match // 変更なし
+            }
+            
+            // コンストラクタ本体にプロパティ代入を追加
+            const modifiedBody = classBody.replace(
+              /constructor\s*\([^)]*\)\s*\{/,
+              (ctorMatch: string) => {
+                const assignments = paramProps
+                  .map((prop: string) => `this.${prop} = ${prop};`)
+                  .join('\n    ')
+                return `${ctorMatch}\n    ${assignments}`
+              }
+            )
+            
+            return `class ${className} {${modifiedBody}}`
+          }
+        )
+        
+        // 型アノテーションを削除（変数、パラメータ、戻り値）
+        jsCode = jsCode.replace(/:\s*([a-zA-Z_$][\w$]*(<[^>]+>)?(\[\])?(\s*\|\s*[a-zA-Z_$][\w$]*)*)/g, '')
+        
+        // インターフェースと型定義を削除
+        jsCode = jsCode.replace(/interface\s+\w+\s*\{[^}]*\}/g, '')
+        jsCode = jsCode.replace(/type\s+\w+\s*=\s*[^;\n]+[;\n]/g, '')
+        
+        // as キャストを削除
+        jsCode = jsCode.replace(/\s+as\s+\w+/g, '')
+        
+        // 非同期コードをサポートするために、async関数でラップして実行
+        const wrappedCode = `
+          (async () => {
+            ${jsCode}
+          })()
+        `
+        
+        // evalの代わりにPromiseを返す関数として実行
+        const result = eval(wrappedCode)
+        
+        // Promiseが返された場合は待機
+        if (result instanceof Promise) {
+          await result
+          // 少し待ってログが完了するのを待つ
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
         
         setOutput(logs.length > 0 ? logs.join('\n') : '実行完了（出力なし）')
       } catch (error) {
@@ -191,19 +274,39 @@ export default function CodeRunner() {
     try {
       // stdoutをキャプチャ
       const pyodide = pyodideRef.current as { runPythonAsync: (code: string) => Promise<string> }
+      
+      // asyncio.run() を使わずに直接 await する形に変換
+      let modifiedCode = code
+      
+      // asyncio.run(main()) パターンを検出して変換
+      if (modifiedCode.includes('asyncio.run(')) {
+        // asyncio.run() を削除し、直接awaitする形に変換
+        modifiedCode = modifiedCode.replace(
+          /asyncio\.run\(([^)]+)\)/g,
+          'await $1'
+        )
+        // if __name__ == "__main__": ブロックを削除
+        modifiedCode = modifiedCode.replace(
+          /if\s+__name__\s*==\s*["']__main__["']\s*:\s*/g,
+          ''
+        )
+      }
+      
       const result = await pyodide.runPythonAsync(`
 import sys
 from io import StringIO
+import asyncio
 
 # stdoutをキャプチャ
 old_stdout = sys.stdout
 sys.stdout = StringIO()
 
 try:
-${code.split('\n').map((line: string) => '    ' + line).join('\n')}
+${modifiedCode.split('\n').map((line: string) => '    ' + line).join('\n')}
     output = sys.stdout.getvalue()
 except Exception as e:
-    output = f"エラー: {str(e)}"
+    import traceback
+    output = f"エラー: {str(e)}\\n\\nトレースバック:\\n{traceback.format_exc()}"
 finally:
     sys.stdout = old_stdout
 
@@ -338,7 +441,7 @@ output
 
     try {
       if (language === 'typescript') {
-        runTypeScript()
+        await runTypeScript()
       } else if (language === 'python') {
         await runPython()
       } else if (language === 'csharp') {
