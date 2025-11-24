@@ -26,6 +26,9 @@ import { WASM_CONFIG } from '../constants/wasmConstants'
 
 type Language = 'typescript' | 'python' | 'csharp'
 
+// Constants for async execution
+const ASYNC_COMPLETION_WAIT_MS = 1000 // Wait time for async operations to complete
+
 // WASM runtime interface
 interface WasmRuntime {
   runtime: unknown
@@ -223,7 +226,10 @@ export default function CodeRunner() {
         )
         
         // 型アノテーションを削除（変数、パラメータ、戻り値）
-        jsCode = jsCode.replace(/:\s*([a-zA-Z_$][\w$]*(<[^>]+>)?(\[\])?(\s*\|\s*[a-zA-Z_$][\w$]*)*)/g, '')
+        // Note: This is a simplified approach. It removes type annotations that follow
+        // the pattern ": Type" but may not handle all edge cases perfectly.
+        // For production use, consider using a proper TypeScript parser.
+        jsCode = jsCode.replace(/:\s*([a-zA-Z_$][\w$]*(<[^>]+>)?(\[\])?(\s*\|\s*[a-zA-Z_$][\w$]*)*)\s*([,;)\n=])/g, '$5')
         
         // インターフェースと型定義を削除
         jsCode = jsCode.replace(/interface\s+\w+\s*\{[^}]*\}/g, '')
@@ -246,7 +252,7 @@ export default function CodeRunner() {
         if (result instanceof Promise) {
           await result
           // 非同期処理が完全に完了するのを待つ（タイマーなどを考慮）
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          await new Promise(resolve => setTimeout(resolve, ASYNC_COMPLETION_WAIT_MS))
         }
         
         setOutput(logs.length > 0 ? logs.join('\n') : '実行完了（出力なし）')
@@ -279,12 +285,20 @@ export default function CodeRunner() {
       let modifiedCode = code
       
       // asyncio.run(main()) パターンを検出して変換
+      // Note: This regex handles simple cases like asyncio.run(main()) 
+      // For complex nested calls, users should refactor to use await directly
       if (modifiedCode.includes('asyncio.run(')) {
-        // asyncio.run() を削除し、直接awaitする形に変換
+        // Match asyncio.run with balanced parentheses (simple cases)
         modifiedCode = modifiedCode.replace(
-          /asyncio\.run\(([^)]+)\)/g,
+          /asyncio\.run\(([\w.]+\([^)]*\))\)/g,
           'await $1'
         )
+        // Also handle asyncio.run(simple_function())
+        modifiedCode = modifiedCode.replace(
+          /asyncio\.run\(([\w.]+\(\))\)/g,
+          'await $1'
+        )
+        
         // if __name__ == "__main__": ブロックを削除
         modifiedCode = modifiedCode.replace(
           /if\s+__name__\s*==\s*["']__main__["']\s*:\s*/g,
