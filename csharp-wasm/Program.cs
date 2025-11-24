@@ -38,6 +38,7 @@ public partial class CSharpRunner
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 {code}";
             }
@@ -49,6 +50,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 public class UserProgram
 {{
@@ -97,7 +99,7 @@ public class UserProgram
             var type = assembly.GetType("UserProgram");
             var method = type?.GetMethod("Execute", BindingFlags.Public | BindingFlags.Static);
             
-            // If not found, search for any class with a Main method
+            // If not found, search for any class with a Main method (sync or async)
             if (method == null)
             {
                 foreach (var assemblyType in assembly.GetTypes())
@@ -126,12 +128,36 @@ public class UserProgram
                 
                 try
                 {
-                    method.Invoke(null, null);
+                    // Check if method is async
+                    var returnType = method.ReturnType;
+                    bool isAsync = returnType == typeof(Task) || 
+                                  (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>));
+                    
+                    if (isAsync)
+                    {
+                        // Execute async method and wait for completion
+                        var task = method.Invoke(null, method.GetParameters().Length == 0 ? null : new object[] { Array.Empty<string>() }) as Task;
+                        if (task != null)
+                        {
+                            // Note: In WASM single-threaded environment, we need to use ConfigureAwait(false)
+                            // However, GetAwaiter().GetResult() works in the synchronous context
+                            task.GetAwaiter().GetResult();
+                        }
+                    }
+                    else
+                    {
+                        // Execute sync method
+                        method.Invoke(null, method.GetParameters().Length == 0 ? null : new object[] { Array.Empty<string>() });
+                    }
                 }
                 catch (Exception ex)
                 {
                     var innerEx = ex.InnerException ?? ex;
                     consoleOutput.AppendLine($"実行エラー: {innerEx.Message}");
+                    if (!string.IsNullOrEmpty(innerEx.StackTrace))
+                    {
+                        consoleOutput.AppendLine($"\nスタックトレース:\n{innerEx.StackTrace}");
+                    }
                 }
                 finally
                 {
