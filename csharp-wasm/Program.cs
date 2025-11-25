@@ -168,11 +168,12 @@ namespace WasmHelpers
         // Transform to WasmHelpers.WasmTask.RunSync(methodCall())
         // Using a regex that captures the method call before .GetAwaiter()
         
-        // Match pattern: identifier().GetAwaiter().GetResult()
+        // Match pattern: identifier(...).GetAwaiter().GetResult()
         // This handles most common cases like: RunAsync().GetAwaiter().GetResult()
+        // The pattern supports one level of nested parentheses for method arguments
         code = System.Text.RegularExpressions.Regex.Replace(
             code,
-            @"(\w+\s*\([^)]*\))\s*\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)",
+            @"(\w+\s*\((?:[^()]*|\([^()]*\))*\))\s*\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)",
             "WasmHelpers.WasmTask.RunSync($1)",
             System.Text.RegularExpressions.RegexOptions.None);
         
@@ -186,10 +187,11 @@ namespace WasmHelpers
         
         // Replace .Wait() calls on tasks
         // Transform: someTask.Wait() -> WasmHelpers.WasmTask.RunSync(someTask)
-        // Match pattern: methodCall().Wait()
+        // Match pattern: methodCall(...).Wait()
+        // The pattern supports one level of nested parentheses for method arguments
         code = System.Text.RegularExpressions.Regex.Replace(
             code,
-            @"(\w+\s*\([^)]*\))\s*\.Wait\s*\(\s*\)",
+            @"(\w+\s*\((?:[^()]*|\([^()]*\))*\))\s*\.Wait\s*\(\s*\)",
             "WasmHelpers.WasmTask.RunSync($1)",
             System.Text.RegularExpressions.RegexOptions.None);
         
