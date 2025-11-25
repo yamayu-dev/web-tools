@@ -84,13 +84,56 @@ namespace WasmHelpers
             cancellationToken.ThrowIfCancellationRequested();
             return System.Threading.Tasks.Task.CompletedTask;
         }
+
+        /// <summary>
+        /// WASM-compatible replacement for task.GetAwaiter().GetResult().
+        /// In single-threaded WASM, blocking waits (Monitor.Wait) are not supported.
+        /// This method checks if the task is completed and returns, or throws if faulted.
+        /// </summary>
+        public static void RunSync(System.Threading.Tasks.Task task)
+        {
+            if (task == null) return;
+            
+            if (task.IsCompleted)
+            {
+                if (task.IsFaulted && task.Exception != null)
+                {
+                    throw task.Exception.InnerException ?? task.Exception;
+                }
+                return;
+            }
+            
+            // Task is not completed - in WASM we cannot block
+            // Since we replace Task.Delay with immediate completion, 
+            // this should not happen in practice
+            throw new System.InvalidOperationException(""WASM環境ではブロッキング待機はサポートされていません。async/awaitパターンを使用してください。"");
+        }
+
+        /// <summary>
+        /// WASM-compatible replacement for task.GetAwaiter().GetResult() with return value.
+        /// </summary>
+        public static T RunSync<T>(System.Threading.Tasks.Task<T> task)
+        {
+            if (task == null) return default(T);
+            
+            if (task.IsCompleted)
+            {
+                if (task.IsFaulted && task.Exception != null)
+                {
+                    throw task.Exception.InnerException ?? task.Exception;
+                }
+                return task.Result;
+            }
+            
+            throw new System.InvalidOperationException(""WASM環境ではブロッキング待機はサポートされていません。async/awaitパターンを使用してください。"");
+        }
     }
 }
 ";
 
     /// <summary>
     /// Preprocesses user code to replace unsupported APIs with WASM-compatible alternatives.
-    /// Note: This uses text-based replacement which may affect Task.Delay mentions in strings
+    /// Note: This uses text-based replacement which may affect mentions in strings
     /// or comments. For a code playground, this tradeoff is acceptable to avoid the complexity
     /// of full syntax tree parsing while still enabling the common use case of async code.
     /// </summary>
@@ -109,6 +152,52 @@ namespace WasmHelpers
             code,
             @"\bSystem\.Threading\.Tasks\.Task\.Delay\b",
             "WasmHelpers.WasmTask.Delay",
+            System.Text.RegularExpressions.RegexOptions.None);
+
+        // Replace blocking wait patterns that use Monitor.Wait internally
+        // These patterns cause "Cannot wait on monitors on this runtime" error in WASM
+        
+        // Replace .GetAwaiter().GetResult() pattern
+        // We need to transform: someTask.GetAwaiter().GetResult()
+        // Since this is difficult to do with pure regex (capturing arbitrary expressions),
+        // we use a multi-step approach:
+        // 1. First, mark the pattern
+        // 2. Then transform it
+        
+        // For simple patterns like methodCall().GetAwaiter().GetResult()
+        // Transform to WasmHelpers.WasmTask.RunSync(methodCall())
+        // Using a regex that captures the method call before .GetAwaiter()
+        
+        // Match pattern: identifier().GetAwaiter().GetResult()
+        // This handles most common cases like: RunAsync().GetAwaiter().GetResult()
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"(\w+\s*\([^)]*\))\s*\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)",
+            "WasmHelpers.WasmTask.RunSync($1)",
+            System.Text.RegularExpressions.RegexOptions.None);
+        
+        // Match pattern: variable.GetAwaiter().GetResult()
+        // This handles cases like: task.GetAwaiter().GetResult()
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"(\w+)\s*\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)",
+            "WasmHelpers.WasmTask.RunSync($1)",
+            System.Text.RegularExpressions.RegexOptions.None);
+        
+        // Replace .Wait() calls on tasks
+        // Transform: someTask.Wait() -> WasmHelpers.WasmTask.RunSync(someTask)
+        // Match pattern: methodCall().Wait()
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"(\w+\s*\([^)]*\))\s*\.Wait\s*\(\s*\)",
+            "WasmHelpers.WasmTask.RunSync($1)",
+            System.Text.RegularExpressions.RegexOptions.None);
+        
+        // Match pattern: variable.Wait()
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"(\w+)\s*\.Wait\s*\(\s*\)",
+            "WasmHelpers.WasmTask.RunSync($1)",
             System.Text.RegularExpressions.RegexOptions.None);
 
         return code;
@@ -251,9 +340,25 @@ public class UserProgram
                         var task = method.Invoke(null, method.GetParameters().Length == 0 ? null : new object[] { Array.Empty<string>() }) as Task;
                         if (task != null)
                         {
-                            // Note: In WASM single-threaded environment, we need to use ConfigureAwait(false)
-                            // However, GetAwaiter().GetResult() works in the synchronous context
-                            task.GetAwaiter().GetResult();
+                            // In WASM single-threaded environment, blocking waits (GetAwaiter().GetResult())
+                            // cause "Cannot wait on monitors on this runtime" error.
+                            // Since we preprocess code to use WasmTask.Delay (which returns CompletedTask),
+                            // most tasks should complete synchronously.
+                            // If the task is completed, we can safely get the result without blocking.
+                            if (task.IsCompleted)
+                            {
+                                // Task completed synchronously, safe to get result
+                                if (task.IsFaulted && task.Exception != null)
+                                {
+                                    throw task.Exception.InnerException ?? task.Exception;
+                                }
+                            }
+                            else
+                            {
+                                // Task is not completed - this shouldn't happen with properly preprocessed code
+                                // but if it does, we can't block, so just let it run and return
+                                consoleOutput.AppendLine("警告: 非同期タスクが完了していません。WASM環境ではブロッキング待機がサポートされていません。");
+                            }
                         }
                     }
                     else
