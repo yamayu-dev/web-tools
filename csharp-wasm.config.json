@@ -1,5 +1,5 @@
 {
-  "buildVersion": "1.0.5",
+  "buildVersion": "1.0.6",
   "wasmEnabled": true,
   "description": "Configuration for C# WebAssembly execution. Increment buildVersion to trigger rebuild.",
   "outputPath": "public/wasm",

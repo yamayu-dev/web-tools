@@ -15,8 +15,11 @@
     <!-- 
       Prevent IL Linker from trimming assemblies needed for dynamic code execution
       This ensures System.Runtime, System.Linq, System.Threading.Tasks, etc. are available at runtime
+      
+      PublishTrimmed=false: 全てのライブラリを保持（バンドルサイズ増加）
+      PublishTrimmed=true: TrimmerRootAssemblyで指定したアセンブリのみ保持（推奨）
     -->
-    <PublishTrimmed>true</PublishTrimmed>
+    <PublishTrimmed>false</PublishTrimmed>
     <TrimMode>partial</TrimMode>
   </PropertyGroup>
 
