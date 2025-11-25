@@ -32,6 +32,11 @@ namespace WasmHelpers
         /// </summary>
         public static System.Threading.Tasks.Task Delay(int millisecondsDelay)
         {
+            // Validate parameter to match original Task.Delay behavior
+            if (millisecondsDelay < -1)
+            {
+                throw new System.ArgumentOutOfRangeException(nameof(millisecondsDelay), ""The value needs to be either -1 (indicating an infinite timeout), 0 or a positive integer."");
+            }
             // In WASM single-threaded environment, we cannot actually delay.
             // Return a completed task to allow async code flow to continue.
             return System.Threading.Tasks.Task.CompletedTask;
@@ -42,6 +47,12 @@ namespace WasmHelpers
         /// </summary>
         public static System.Threading.Tasks.Task Delay(System.TimeSpan delay)
         {
+            // Validate parameter to match original Task.Delay behavior
+            long totalMilliseconds = (long)delay.TotalMilliseconds;
+            if (totalMilliseconds < -1 || totalMilliseconds > int.MaxValue)
+            {
+                throw new System.ArgumentOutOfRangeException(nameof(delay), ""The value needs to translate in milliseconds to -1 (infinite timeout), 0 or a positive integer less than or equal to Int32.MaxValue."");
+            }
             return System.Threading.Tasks.Task.CompletedTask;
         }
 
@@ -50,6 +61,11 @@ namespace WasmHelpers
         /// </summary>
         public static System.Threading.Tasks.Task Delay(int millisecondsDelay, System.Threading.CancellationToken cancellationToken)
         {
+            // Validate parameter to match original Task.Delay behavior
+            if (millisecondsDelay < -1)
+            {
+                throw new System.ArgumentOutOfRangeException(nameof(millisecondsDelay), ""The value needs to be either -1 (indicating an infinite timeout), 0 or a positive integer."");
+            }
             cancellationToken.ThrowIfCancellationRequested();
             return System.Threading.Tasks.Task.CompletedTask;
         }
@@ -59,6 +75,12 @@ namespace WasmHelpers
         /// </summary>
         public static System.Threading.Tasks.Task Delay(System.TimeSpan delay, System.Threading.CancellationToken cancellationToken)
         {
+            // Validate parameter to match original Task.Delay behavior
+            long totalMilliseconds = (long)delay.TotalMilliseconds;
+            if (totalMilliseconds < -1 || totalMilliseconds > int.MaxValue)
+            {
+                throw new System.ArgumentOutOfRangeException(nameof(delay), ""The value needs to translate in milliseconds to -1 (infinite timeout), 0 or a positive integer less than or equal to Int32.MaxValue."");
+            }
             cancellationToken.ThrowIfCancellationRequested();
             return System.Threading.Tasks.Task.CompletedTask;
         }
@@ -68,6 +90,9 @@ namespace WasmHelpers
 
     /// <summary>
     /// Preprocesses user code to replace unsupported APIs with WASM-compatible alternatives.
+    /// Note: This uses text-based replacement which may affect Task.Delay mentions in strings
+    /// or comments. For a code playground, this tradeoff is acceptable to avoid the complexity
+    /// of full syntax tree parsing while still enabling the common use case of async code.
     /// </summary>
     private static string PreprocessCode(string code)
     {
