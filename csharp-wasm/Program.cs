@@ -14,11 +14,89 @@ await builder.Build().RunAsync();
 // Export functions for JavaScript to call
 public partial class CSharpRunner
 {
+    // Helper class source code that provides WASM-compatible implementations
+    // for APIs that don't work in single-threaded WebAssembly environment
+    private const string WasmHelperClass = @"
+namespace WasmHelpers
+{
+    /// <summary>
+    /// Provides WASM-compatible implementations for threading-related APIs
+    /// that are not available in single-threaded WebAssembly environment.
+    /// </summary>
+    public static class WasmTask
+    {
+        /// <summary>
+        /// WASM-compatible replacement for Task.Delay.
+        /// In single-threaded WASM, actual delays are not possible,
+        /// so this returns a completed task immediately.
+        /// </summary>
+        public static System.Threading.Tasks.Task Delay(int millisecondsDelay)
+        {
+            // In WASM single-threaded environment, we cannot actually delay.
+            // Return a completed task to allow async code flow to continue.
+            return System.Threading.Tasks.Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// WASM-compatible replacement for Task.Delay with TimeSpan.
+        /// </summary>
+        public static System.Threading.Tasks.Task Delay(System.TimeSpan delay)
+        {
+            return System.Threading.Tasks.Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// WASM-compatible replacement for Task.Delay with CancellationToken.
+        /// </summary>
+        public static System.Threading.Tasks.Task Delay(int millisecondsDelay, System.Threading.CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return System.Threading.Tasks.Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// WASM-compatible replacement for Task.Delay with TimeSpan and CancellationToken.
+        /// </summary>
+        public static System.Threading.Tasks.Task Delay(System.TimeSpan delay, System.Threading.CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return System.Threading.Tasks.Task.CompletedTask;
+        }
+    }
+}
+";
+
+    /// <summary>
+    /// Preprocesses user code to replace unsupported APIs with WASM-compatible alternatives.
+    /// </summary>
+    private static string PreprocessCode(string code)
+    {
+        // Replace Task.Delay calls with WasmHelpers.WasmTask.Delay
+        // This handles various patterns of Task.Delay usage
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"\bTask\.Delay\b",
+            "WasmHelpers.WasmTask.Delay",
+            System.Text.RegularExpressions.RegexOptions.None);
+        
+        // Also handle fully qualified System.Threading.Tasks.Task.Delay
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"\bSystem\.Threading\.Tasks\.Task\.Delay\b",
+            "WasmHelpers.WasmTask.Delay",
+            System.Text.RegularExpressions.RegexOptions.None);
+
+        return code;
+    }
+
     [JSExport]
     public static string CompileAndRun(string code)
     {
         try
         {
+            // Preprocess user code to replace unsupported APIs
+            code = PreprocessCode(code);
+
             // Detect if user code already has a class definition
             // Use a more robust check with word boundaries
             bool hasClassDefinition = System.Text.RegularExpressions.Regex.IsMatch(
@@ -33,14 +111,16 @@ public partial class CSharpRunner
                 // Add using statements only if they're missing
                 bool hasUsingStatements = code.Contains("using ");
                 wrappedCode = hasUsingStatements 
-                    ? code 
+                    ? code + "\n" + WasmHelperClass
                     : $@"using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-{code}";
+{code}
+
+{WasmHelperClass}";
             }
             else
             {
@@ -58,7 +138,9 @@ public class UserProgram
     {{
         {code}
     }}
-}}";
+}}
+
+{WasmHelperClass}";
             }
 
             // Parse the code

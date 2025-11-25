@@ -597,7 +597,8 @@ output
           '外部NuGetパッケージ（ブラウザ環境のため）',
           'ファイルシステムアクセス',
           'ネットワーク機能（制限付き）',
-          'Console.WriteLine(bool) - bool値は.ToString()で文字列化が必要'
+          'Console.WriteLine(bool) - bool値は.ToString()で文字列化が必要',
+          'Task.Delay - 実行可能だが実際の遅延なし（WASMシングルスレッド制限）'
         ]
       }
     }
