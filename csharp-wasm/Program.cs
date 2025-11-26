@@ -224,34 +224,45 @@ namespace WasmHelpers
         // Replace blocking wait patterns that use Monitor.Wait internally
         // These patterns cause "Cannot wait on monitors on this runtime" error in WASM
         
-        // Only run expensive regex if the code contains the patterns we're looking for
-        // This avoids catastrophic backtracking on code that doesn't use these patterns
+        // Only run regex if the code contains the patterns we're looking for
+        // This avoids unnecessary processing and potential performance issues
         if (code.Contains(".GetAwaiter"))
         {
             // Replace .GetAwaiter().GetResult() pattern
             // Transform: someTask.GetAwaiter().GetResult() -> WasmHelpers.WasmTask.RunSync(someTask)
             
-            // Match pattern: variable.GetAwaiter().GetResult()
-            // This handles simple cases like: task.GetAwaiter().GetResult()
+            // Match pattern: identifier chain (with optional property access) followed by .GetAwaiter().GetResult()
+            // This handles:
+            //   - Simple: task.GetAwaiter().GetResult()
+            //   - Property: obj.Task.GetAwaiter().GetResult()
+            //   - Chained: obj.Prop1.Prop2.GetAwaiter().GetResult()
+            // Note: Does NOT handle method calls like GetTaskAsync().GetAwaiter().GetResult()
+            // as those patterns can cause catastrophic backtracking. For such cases,
+            // users should store the task in a variable first.
             code = System.Text.RegularExpressions.Regex.Replace(
                 code,
-                @"(\w+)\s*\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)",
+                @"([\w.]+)\s*\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)",
                 "WasmHelpers.WasmTask.RunSync($1)",
                 System.Text.RegularExpressions.RegexOptions.None);
         }
         
         // Only run .Wait() regex if the code actually contains ".Wait("
-        // Note: We check for ".Wait(" specifically to avoid false positives and
-        // to skip the regex when it's not needed, preventing performance issues
         if (code.Contains(".Wait("))
         {
             // Replace .Wait() calls on tasks
             // Transform: someTask.Wait() -> WasmHelpers.WasmTask.RunSync(someTask)
-            // Match pattern: variable.Wait() - only handle simple variable cases
-            // to avoid catastrophic backtracking with complex nested expressions
+            // 
+            // Match pattern: identifier chain (with optional property access) followed by .Wait()
+            // This handles:
+            //   - Simple: task.Wait()
+            //   - Property: obj.Task.Wait()
+            //   - Chained: obj.Prop1.Prop2.Wait()
+            // Note: Does NOT handle method calls like GetTaskAsync().Wait()
+            // as those patterns can cause catastrophic backtracking. For such cases,
+            // users should store the task in a variable first.
             code = System.Text.RegularExpressions.Regex.Replace(
                 code,
-                @"(\w+)\s*\.Wait\s*\(\s*\)",
+                @"([\w.]+)\s*\.Wait\s*\(\s*\)",
                 "WasmHelpers.WasmTask.RunSync($1)",
                 System.Text.RegularExpressions.RegexOptions.None);
         }
