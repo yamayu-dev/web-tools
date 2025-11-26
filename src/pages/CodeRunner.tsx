@@ -36,6 +36,7 @@ interface WasmRuntime {
   runtime: unknown
   CSharpRunner: {
     CompileAndRun: (code: string) => string
+    CompileAndRunAsync: (code: string) => Promise<string>
   }
   loaded: boolean
 }
@@ -466,8 +467,20 @@ output
       
       const wasmRuntime = wasmRef.current
       
-      if (wasmRuntime?.CSharpRunner?.CompileAndRun) {
-        // Execute using the actual WASM runtime with Roslyn
+      // Prefer async method for proper async/await support in WASM
+      if (wasmRuntime?.CSharpRunner?.CompileAndRunAsync) {
+        // Execute using the async WASM runtime method
+        // This properly awaits async user code without blocking,
+        // avoiding the "Cannot wait on monitors on this runtime" error
+        try {
+          const result = await wasmRuntime.CSharpRunner.CompileAndRunAsync(code)
+          setOutput(result || '実行完了（出力なし）')
+        } catch (error) {
+          const err = error as Error
+          setOutput(`実行エラー: ${err.message}`)
+        }
+      } else if (wasmRuntime?.CSharpRunner?.CompileAndRun) {
+        // Fallback to sync method for backward compatibility
         try {
           const result = wasmRuntime.CSharpRunner.CompileAndRun(code)
           setOutput(result || '実行完了（出力なし）')
