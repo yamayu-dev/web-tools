@@ -389,9 +389,9 @@ public class UserProgram
     [JSExport]
     public static string CompileAndRun(string code)
     {
-        // For backward compatibility, delegate to async version
-        // Since this is called from JavaScript which can handle Promises,
-        // we use a simple synchronous wrapper that works for sync code
+        // This is a separate synchronous implementation for backward compatibility.
+        // It handles sync code directly and checks task.IsCompleted for async code.
+        // For proper async support, use CompileAndRunAsync instead.
         try
         {
             // Preprocess user code to replace unsupported APIs
