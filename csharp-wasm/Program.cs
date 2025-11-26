@@ -128,6 +128,57 @@ namespace WasmHelpers
             throw new System.InvalidOperationException(""WASM環境ではブロッキング待機はサポートされていません。async/awaitパターンを使用してください。"");
         }
     }
+
+    /// <summary>
+    /// WASM-compatible replacement for CancellationTokenSource.
+    /// The standard CancellationTokenSource.CancelAfter() uses timers that internally
+    /// call Monitor.Wait, which is not supported in single-threaded WASM.
+    /// This implementation provides a simplified version that works in WASM.
+    /// </summary>
+    public class WasmCancellationTokenSource : System.IDisposable
+    {
+        private readonly System.Threading.CancellationTokenSource _cts = new System.Threading.CancellationTokenSource();
+
+        public System.Threading.CancellationToken Token => _cts.Token;
+
+        public bool IsCancellationRequested => _cts.IsCancellationRequested;
+
+        public void Cancel()
+        {
+            _cts.Cancel();
+        }
+
+        public void Cancel(bool throwOnFirstException)
+        {
+            _cts.Cancel(throwOnFirstException);
+        }
+
+        /// <summary>
+        /// WASM-compatible CancelAfter - in single-threaded WASM, we cannot use timers.
+        /// This is a no-op in WASM since actual time-based cancellation is not possible.
+        /// The cancellation will not automatically trigger.
+        /// </summary>
+        public void CancelAfter(int millisecondsDelay)
+        {
+            // In WASM single-threaded environment, we cannot use timers.
+            // This is a no-op - the code will run to completion without timeout.
+            // Users should be aware that time-based cancellation doesn't work in WASM.
+        }
+
+        /// <summary>
+        /// WASM-compatible CancelAfter with TimeSpan - no-op in WASM.
+        /// </summary>
+        public void CancelAfter(System.TimeSpan delay)
+        {
+            // In WASM single-threaded environment, we cannot use timers.
+            // This is a no-op.
+        }
+
+        public void Dispose()
+        {
+            _cts.Dispose();
+        }
+    }
 }
 ";
 
@@ -152,6 +203,22 @@ namespace WasmHelpers
             code,
             @"\bSystem\.Threading\.Tasks\.Task\.Delay\b",
             "WasmHelpers.WasmTask.Delay",
+            System.Text.RegularExpressions.RegexOptions.None);
+
+        // Replace CancellationTokenSource with WASM-compatible version
+        // The standard CancellationTokenSource.CancelAfter() uses timers that internally
+        // call Monitor.Wait, which is not supported in single-threaded WASM.
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"\bnew\s+CancellationTokenSource\s*\(\s*\)",
+            "new WasmHelpers.WasmCancellationTokenSource()",
+            System.Text.RegularExpressions.RegexOptions.None);
+        
+        // Also handle fully qualified System.Threading.CancellationTokenSource
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"\bnew\s+System\.Threading\.CancellationTokenSource\s*\(\s*\)",
+            "new WasmHelpers.WasmCancellationTokenSource()",
             System.Text.RegularExpressions.RegexOptions.None);
 
         // Replace blocking wait patterns that use Monitor.Wait internally
