@@ -232,16 +232,16 @@ namespace WasmHelpers
             // Transform: someTask.GetAwaiter().GetResult() -> WasmHelpers.WasmTask.RunSync(someTask)
             
             // Match pattern: identifier chain (with optional property access) followed by .GetAwaiter().GetResult()
-            // This handles:
-            //   - Simple: task.GetAwaiter().GetResult()
-            //   - Property: obj.Task.GetAwaiter().GetResult()
-            //   - Chained: obj.Prop1.Prop2.GetAwaiter().GetResult()
+            // Pattern: (\w+(?:\.\w+)*) matches complete identifier chains like:
+            //   - Simple: task
+            //   - Property: obj.Task
+            //   - Chained: obj.Prop1.Prop2
             // Note: Does NOT handle method calls like GetTaskAsync().GetAwaiter().GetResult()
             // as those patterns can cause catastrophic backtracking. For such cases,
             // users should store the task in a variable first.
             code = System.Text.RegularExpressions.Regex.Replace(
                 code,
-                @"([\w.]+)\s*\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)",
+                @"(\w+(?:\.\w+)*)\s*\.GetAwaiter\s*\(\s*\)\s*\.GetResult\s*\(\s*\)",
                 "WasmHelpers.WasmTask.RunSync($1)",
                 System.Text.RegularExpressions.RegexOptions.None);
         }
@@ -253,16 +253,16 @@ namespace WasmHelpers
             // Transform: someTask.Wait() -> WasmHelpers.WasmTask.RunSync(someTask)
             // 
             // Match pattern: identifier chain (with optional property access) followed by .Wait()
-            // This handles:
-            //   - Simple: task.Wait()
-            //   - Property: obj.Task.Wait()
-            //   - Chained: obj.Prop1.Prop2.Wait()
+            // Pattern: (\w+(?:\.\w+)*) matches complete identifier chains like:
+            //   - Simple: task
+            //   - Property: obj.Task
+            //   - Chained: obj.Prop1.Prop2
             // Note: Does NOT handle method calls like GetTaskAsync().Wait()
             // as those patterns can cause catastrophic backtracking. For such cases,
             // users should store the task in a variable first.
             code = System.Text.RegularExpressions.Regex.Replace(
                 code,
-                @"([\w.]+)\s*\.Wait\s*\(\s*\)",
+                @"(\w+(?:\.\w+)*)\s*\.Wait\s*\(\s*\)",
                 "WasmHelpers.WasmTask.RunSync($1)",
                 System.Text.RegularExpressions.RegexOptions.None);
         }
