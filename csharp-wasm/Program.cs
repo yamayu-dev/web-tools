@@ -128,6 +128,57 @@ namespace WasmHelpers
             throw new System.InvalidOperationException(""WASM環境ではブロッキング待機はサポートされていません。async/awaitパターンを使用してください。"");
         }
     }
+
+    /// <summary>
+    /// WASM-compatible replacement for CancellationTokenSource.
+    /// The standard CancellationTokenSource.CancelAfter() uses timers that internally
+    /// call Monitor.Wait, which is not supported in single-threaded WASM.
+    /// This implementation provides a simplified version that works in WASM.
+    /// </summary>
+    public class WasmCancellationTokenSource : System.IDisposable
+    {
+        private readonly System.Threading.CancellationTokenSource _cts = new System.Threading.CancellationTokenSource();
+
+        public System.Threading.CancellationToken Token => _cts.Token;
+
+        public bool IsCancellationRequested => _cts.IsCancellationRequested;
+
+        public void Cancel()
+        {
+            _cts.Cancel();
+        }
+
+        public void Cancel(bool throwOnFirstException)
+        {
+            _cts.Cancel(throwOnFirstException);
+        }
+
+        /// <summary>
+        /// WASM-compatible CancelAfter - in single-threaded WASM, we cannot use timers.
+        /// This is a no-op in WASM since actual time-based cancellation is not possible.
+        /// The cancellation will not automatically trigger.
+        /// </summary>
+        public void CancelAfter(int millisecondsDelay)
+        {
+            // In WASM single-threaded environment, we cannot use timers.
+            // This is a no-op - the code will run to completion without timeout.
+            // Users should be aware that time-based cancellation doesn't work in WASM.
+        }
+
+        /// <summary>
+        /// WASM-compatible CancelAfter with TimeSpan - no-op in WASM.
+        /// </summary>
+        public void CancelAfter(System.TimeSpan delay)
+        {
+            // In WASM single-threaded environment, we cannot use timers.
+            // This is a no-op.
+        }
+
+        public void Dispose()
+        {
+            _cts.Dispose();
+        }
+    }
 }
 ";
 
@@ -152,6 +203,22 @@ namespace WasmHelpers
             code,
             @"\bSystem\.Threading\.Tasks\.Task\.Delay\b",
             "WasmHelpers.WasmTask.Delay",
+            System.Text.RegularExpressions.RegexOptions.None);
+
+        // Replace CancellationTokenSource with WASM-compatible version
+        // The standard CancellationTokenSource.CancelAfter() uses timers that internally
+        // call Monitor.Wait, which is not supported in single-threaded WASM.
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"\bnew\s+CancellationTokenSource\s*\(\s*\)",
+            "new WasmHelpers.WasmCancellationTokenSource()",
+            System.Text.RegularExpressions.RegexOptions.None);
+        
+        // Also handle fully qualified System.Threading.CancellationTokenSource
+        code = System.Text.RegularExpressions.Regex.Replace(
+            code,
+            @"\bnew\s+System\.Threading\.CancellationTokenSource\s*\(\s*\)",
+            "new WasmHelpers.WasmCancellationTokenSource()",
             System.Text.RegularExpressions.RegexOptions.None);
 
         // Replace blocking wait patterns that use Monitor.Wait internally
@@ -205,8 +272,13 @@ namespace WasmHelpers
         return code;
     }
 
+    /// <summary>
+    /// Compiles and executes C# code asynchronously.
+    /// This method properly awaits async user code without blocking,
+    /// avoiding the "Cannot wait on monitors on this runtime" error in WASM.
+    /// </summary>
     [JSExport]
-    public static string CompileAndRun(string code)
+    public static async Task<string> CompileAndRunAsync(string code)
     {
         try
         {
@@ -338,15 +410,190 @@ public class UserProgram
                     
                     if (isAsync)
                     {
-                        // Execute async method and wait for completion
+                        // Execute async method and await for completion
+                        // Using await instead of Task.Wait() avoids blocking and
+                        // prevents the "Cannot wait on monitors on this runtime" error
                         var task = method.Invoke(null, method.GetParameters().Length == 0 ? null : new object[] { Array.Empty<string>() }) as Task;
                         if (task != null)
                         {
-                            // In WASM single-threaded environment, blocking waits (GetAwaiter().GetResult())
-                            // cause "Cannot wait on monitors on this runtime" error.
-                            // Since we preprocess code to use WasmTask.Delay (which returns CompletedTask),
-                            // most tasks should complete synchronously.
-                            // If the task is completed, we can safely get the result without blocking.
+                            await task;
+                        }
+                    }
+                    else
+                    {
+                        // Execute sync method
+                        method.Invoke(null, method.GetParameters().Length == 0 ? null : new object[] { Array.Empty<string>() });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var innerEx = ex.InnerException ?? ex;
+                    consoleOutput.AppendLine($"実行エラー: {innerEx.Message}");
+                    if (!string.IsNullOrEmpty(innerEx.StackTrace))
+                    {
+                        consoleOutput.AppendLine($"\nスタックトレース:\n{innerEx.StackTrace}");
+                    }
+                }
+                finally
+                {
+                    Console.SetOut(originalOut);
+                }
+            }
+
+            return consoleOutput.ToString();
+        }
+        catch (Exception ex)
+        {
+            return $"システムエラー: {ex.Message}\n{ex.StackTrace}";
+        }
+    }
+
+    /// <summary>
+    /// Synchronous version for backward compatibility.
+    /// This method should only be used for code that doesn't use async/await.
+    /// For async code, use CompileAndRunAsync instead.
+    /// </summary>
+    [JSExport]
+    public static string CompileAndRun(string code)
+    {
+        // This is a separate synchronous implementation for backward compatibility.
+        // It handles sync code directly and checks task.IsCompleted for async code.
+        // For proper async support, use CompileAndRunAsync instead.
+        try
+        {
+            // Preprocess user code to replace unsupported APIs
+            code = PreprocessCode(code);
+
+            // Detect if user code already has a class definition
+            // Use a more robust check with word boundaries
+            bool hasClassDefinition = System.Text.RegularExpressions.Regex.IsMatch(
+                code, 
+                @"\bclass\s+\w+", 
+                System.Text.RegularExpressions.RegexOptions.Multiline);
+            
+            string wrappedCode;
+            if (hasClassDefinition)
+            {
+                // User provided complete code with class definition
+                // Add using statements only if they're missing
+                bool hasUsingStatements = code.Contains("using ");
+                wrappedCode = hasUsingStatements 
+                    ? code + "\n" + WasmHelperClass
+                    : $@"using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+{code}
+
+{WasmHelperClass}";
+            }
+            else
+            {
+                // User provided only statements/expressions - wrap them
+                wrappedCode = $@"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+public class UserProgram
+{{
+    public static void Execute()
+    {{
+        {code}
+    }}
+}}
+
+{WasmHelperClass}";
+            }
+
+            // Parse the code
+            var syntaxTree = CSharpSyntaxTree.ParseText(wrappedCode);
+
+            // Use Basic.Reference.Assemblies.Net80 which includes all .NET 8.0 reference assemblies
+            // This should include System.Runtime, System.Linq, System.Threading.Tasks, etc.
+            // Note: Reference assemblies are metadata-only but should be sufficient for compilation
+            var references = Net80.References.All;
+
+            // Create compilation
+            // Disable features that require threading support in WebAssembly
+            var compilation = CSharpCompilation.Create(
+                "UserCode",
+                new[] { syntaxTree },
+                references,
+                new CSharpCompilationOptions(
+                    OutputKind.DynamicallyLinkedLibrary,
+                    concurrentBuild: false,  // Disable concurrent build to avoid threading issues
+                    reportSuppressedDiagnostics: false));
+
+            // Compile to memory
+            using var ms = new MemoryStream();
+            var result = compilation.Emit(ms);
+
+            if (!result.Success)
+            {
+                var output = new StringBuilder();
+                output.AppendLine("コンパイルエラー:");
+                foreach (var diagnostic in result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error))
+                {
+                    output.AppendLine($"  {diagnostic.GetMessage()}");
+                }
+                return output.ToString();
+            }
+
+            // Load and execute the compiled assembly
+            ms.Seek(0, SeekOrigin.Begin);
+            var assembly = AssemblyLoadContext.Default.LoadFromStream(ms);
+            
+            // Try to find the entry point
+            // First try UserProgram.Execute (for wrapped snippets)
+            var type = assembly.GetType("UserProgram");
+            var method = type?.GetMethod("Execute", BindingFlags.Public | BindingFlags.Static);
+            
+            // If not found, search for any class with a Main method (sync or async)
+            if (method == null)
+            {
+                foreach (var assemblyType in assembly.GetTypes())
+                {
+                    method = assemblyType.GetMethod("Main", BindingFlags.Public | BindingFlags.Static | BindingFlags.NonPublic);
+                    if (method != null)
+                    {
+                        type = assemblyType;
+                        break;
+                    }
+                }
+            }
+
+            if (method == null)
+            {
+                return "実行エラー: Execute または Main メソッドが見つかりません";
+            }
+
+            // Capture console output
+            var consoleOutput = new StringBuilder();
+            var originalOut = Console.Out;
+
+            using (var writer = new StringWriter(consoleOutput))
+            {
+                Console.SetOut(writer);
+                
+                try
+                {
+                    // Check if method is async
+                    var returnType = method.ReturnType;
+                    bool isAsync = returnType == typeof(Task) || 
+                                  (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>));
+                    
+                    if (isAsync)
+                    {
+                        // For async methods in the sync version, we check if the task completes synchronously
+                        // This works when Task.Delay is replaced with WasmTask.Delay (which returns CompletedTask)
+                        var task = method.Invoke(null, method.GetParameters().Length == 0 ? null : new object[] { Array.Empty<string>() }) as Task;
+                        if (task != null)
+                        {
                             if (task.IsCompleted)
                             {
                                 // Task completed synchronously, safe to get result
@@ -357,9 +604,8 @@ public class UserProgram
                             }
                             else
                             {
-                                // Task is not completed - this shouldn't happen with properly preprocessed code
-                                // but if it does, we can't block, so just let it run and return
-                                consoleOutput.AppendLine("警告: 非同期タスクが完了していません。WASM環境ではブロッキング待機がサポートされていません。");
+                                // Task is not completed - recommend using async version
+                                consoleOutput.AppendLine("警告: 非同期タスクが完了していません。CompileAndRunAsyncを使用してください。");
                             }
                         }
                     }
