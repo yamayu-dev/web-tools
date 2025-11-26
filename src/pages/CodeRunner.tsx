@@ -10,7 +10,7 @@ import {
   Dialog,
   IconButton,
 } from '@chakra-ui/react'
-import { Play, RotateCcw, Code as CodeIcon, HelpCircle, Trash2, Download, Upload } from 'lucide-react'
+import { Play, RotateCcw, Code as CodeIcon, HelpCircle, Trash2, Download, Upload, Copy } from 'lucide-react'
 import { useToast } from '../hooks/useToast'
 import { useColorStyles } from '../hooks/useColorStyles'
 import { useColorMode } from '../hooks/useColorMode'
@@ -105,6 +105,7 @@ export default function CodeRunner() {
   const [isRunning, setIsRunning] = useState(false)
   const [pyodideReady, setPyodideReady] = useState(false)
   const [wasmReady, setWasmReady] = useState(false)
+  const [wasmVersion, setWasmVersion] = useState<string>('')
   const [isHelpOpen, setIsHelpOpen] = useState(false)
   const pyodideRef = useRef<unknown>(null)
   const wasmRef = useRef<WasmRuntime | null>(null)
@@ -112,6 +113,16 @@ export default function CodeRunner() {
   const colorStyles = useColorStyles()
   const { colorMode } = useColorMode()
   const { showToast } = useToast()
+
+  // クリップボードにコピー
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      showToast(`${label}をコピーしました`, 'success', TOAST_DURATIONS.SHORT)
+    } catch {
+      showToast('コピーに失敗しました', 'error', TOAST_DURATIONS.SHORT)
+    }
+  }
 
   // Pyodideの初期化
   useEffect(() => {
@@ -384,6 +395,18 @@ output
       const baseUrl = import.meta.env.BASE_URL
       const wasmPath = `${baseUrl}${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.WASM_FILENAME}`
       
+      // Fetch WASM version
+      try {
+        const versionPath = `${baseUrl}${WASM_CONFIG.OUTPUT_DIR}/${WASM_CONFIG.VERSION_FILENAME}`
+        const versionResponse = await fetch(versionPath)
+        if (versionResponse.ok) {
+          const versionData = await versionResponse.json()
+          setWasmVersion(versionData.version || '')
+        }
+      } catch {
+        // Version fetch failed, continue without version info
+      }
+      
       // Check if WASM files are available
       try {
         const response = await fetch(wasmPath)
@@ -576,6 +599,7 @@ output
     const info = {
       typescript: {
         title: 'TypeScript',
+        version: 'ES2022 (ブラウザ実行)',
         available: [
           'ブラウザ組み込みAPI（DOM、fetch、console等）',
           'JavaScript標準ライブラリ',
@@ -588,6 +612,7 @@ output
       },
       python: {
         title: 'Python',
+        version: 'Python 3.11 (Pyodide v0.24.1)',
         available: [
           'Python標準ライブラリ',
           'Pyodide組み込みパッケージ（numpy、pandas、matplotlib等）',
@@ -600,6 +625,7 @@ output
       },
       csharp: {
         title: 'C#',
+        version: `C# 12.0 / .NET 8.0${wasmVersion ? ` (WASM v${wasmVersion})` : ''}`,
         available: [
           '.NET 8.0 BCL（基本クラスライブラリ）全namespace',
           'System.*, Microsoft.CSharp, System.Linq等',
@@ -807,14 +833,28 @@ output
         <Flex flex="1" gap={4} overflow="hidden" direction={{ base: 'column', md: 'row' }}>
           {/* エディタエリア */}
           <Box flex="1" minH="200px">
-            <Text
-              fontSize="sm"
-              fontWeight="bold"
-              mb={2}
-              color={colorStyles.text.primary}
-            >
-              コードエディタ
-            </Text>
+            <Flex alignItems="center" justifyContent="space-between" mb={2}>
+              <Text
+                fontSize="sm"
+                fontWeight="bold"
+                color={colorStyles.text.primary}
+              >
+                コードエディタ
+              </Text>
+              <IconButton
+                aria-label="コードをコピー"
+                onClick={() => copyToClipboard(code, 'コード')}
+                size="xs"
+                variant="ghost"
+                color={colorStyles.text.secondary}
+                _hover={{
+                  bg: colorStyles.bg.secondary,
+                  color: colorStyles.text.primary
+                }}
+              >
+                <Copy size={14} />
+              </IconButton>
+            </Flex>
             <Textarea
               value={code}
               onChange={(e) => setCode(e.target.value)}
@@ -833,14 +873,29 @@ output
 
           {/* 出力エリア */}
           <Box flex="1" minH="200px">
-            <Text
-              fontSize="sm"
-              fontWeight="bold"
-              mb={2}
-              color={colorStyles.text.primary}
-            >
-              実行結果
-            </Text>
+            <Flex alignItems="center" justifyContent="space-between" mb={2}>
+              <Text
+                fontSize="sm"
+                fontWeight="bold"
+                color={colorStyles.text.primary}
+              >
+                実行結果
+              </Text>
+              <IconButton
+                aria-label="結果をコピー"
+                onClick={() => copyToClipboard(output, '結果')}
+                size="xs"
+                variant="ghost"
+                color={colorStyles.text.secondary}
+                _hover={{
+                  bg: colorStyles.bg.secondary,
+                  color: colorStyles.text.primary
+                }}
+                disabled={!output}
+              >
+                <Copy size={14} />
+              </IconButton>
+            </Flex>
             <Box
               h="calc(100% - 30px)"
               bg={colorStyles.bg.primary}
@@ -877,6 +932,11 @@ output
             </Dialog.Header>
             <Dialog.CloseTrigger />
             <Dialog.Body>
+              <Box mb={4} p={2} bg={colorStyles.bg.secondary} rounded="md">
+                <Text fontSize="sm" color={colorStyles.text.secondary}>
+                  バージョン: {getLibraryInfo().version}
+                </Text>
+              </Box>
               <Box mb={4}>
                 <Text fontWeight="bold" mb={2} color="green.600">
                   ✓ 利用可能
